@@ -16,7 +16,7 @@ env:
   # Versao usada para montar o vendor; precisa atender ao "php" do composer.json.
   PHP_VERSION: '7.4'
   DEPLOY_HOST: wiseller.com.br
-  # A chave de deploy so enxerga a pasta da API no servidor; "." e a raiz dela.
+  # A chave de deploy so envia arquivos para a pasta da API ("." e a raiz dela) e pede as migrations.
   DEPLOY_PATH: .
   HEALTH_URL: https://apiwiseller.wiseller.com.br/api/currentVersion
   HOST_KEY: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKhOUkK8Ib4xHzEsaqZU3Mas8+uKe4hsRYFKlybXjgld
@@ -67,6 +67,13 @@ jobs:
             --filter='protect /public/img/**' \
             -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
             ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH"
+
+      # No servidor, este comando faz um backup completo do banco e so entao roda "artisan migrate".
+      # Se o backup falhar, nenhuma migration e executada e o deploy fica vermelho.
+      - name: Aplicar migrations
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" migrar
 
       - name: Conferir API no ar
         run: curl --fail --silent --show-error --output /dev/null "$HEALTH_URL"
