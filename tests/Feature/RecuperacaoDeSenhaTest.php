@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\SendMailRecover;
 use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionProperty;
 use Tests\ApiTestCase;
 
@@ -134,9 +135,7 @@ class RecuperacaoDeSenhaTest extends ApiTestCase
         $resposta->assertStatus(400)->assertExactJson(['response' => 'As senhas não conferem']);
     }
 
-    /**
-     * @dataProvider senhasFracas
-     */
+    #[DataProvider('senhasFracas')]
     public function test_senha_da_lista_de_senhas_fracas_e_recusada(string $senhaFraca)
     {
         $usuario = $this->criarUsuario();
@@ -146,7 +145,7 @@ class RecuperacaoDeSenhaTest extends ApiTestCase
         $resposta->assertStatus(400)->assertExactJson(['response' => 'A senha informada é muito fraca']);
     }
 
-    public function senhasFracas(): array
+    public static function senhasFracas(): array
     {
         return [['123456'], ['password'], ['qwerty'], ['iloveyou']];
     }

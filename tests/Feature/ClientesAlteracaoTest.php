@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\ApiTestCase;
 
 class ClientesAlteracaoTest extends ApiTestCase
@@ -73,9 +74,7 @@ class ClientesAlteracaoTest extends ApiTestCase
         $this->assertSame(['62999990001'], $this->telefonesGravadosDe($cliente['id']));
     }
 
-    /**
-     * @dataProvider statusPossiveis
-     */
+    #[DataProvider('statusPossiveis')]
     public function test_troca_de_status_grava_o_novo_status(string $status)
     {
         [$usuario, $token] = $this->criarUsuarioAutenticado();
@@ -89,7 +88,7 @@ class ClientesAlteracaoTest extends ApiTestCase
         $this->assertSame('Inalterado', $gravado['name']);
     }
 
-    public function statusPossiveis(): array
+    public static function statusPossiveis(): array
     {
         return [
             'ligar depois' => ['ld'],

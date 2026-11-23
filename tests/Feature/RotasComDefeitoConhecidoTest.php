@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\ApiTestCase;
 
 /**
@@ -12,9 +13,7 @@ class RotasComDefeitoConhecidoTest extends ApiTestCase
 {
     private const ERRO_INTERNO = 500;
 
-    /**
-     * @dataProvider rotasQueHojeFalham
-     */
+    #[DataProvider('rotasQueHojeFalham')]
     public function test_rota_responde_erro_interno(string $metodo, string $uri, array $dados)
     {
         [, $token] = $this->criarUsuarioAutenticado();
@@ -24,7 +23,7 @@ class RotasComDefeitoConhecidoTest extends ApiTestCase
         $resposta->assertStatus(self::ERRO_INTERNO);
     }
 
-    public function rotasQueHojeFalham(): array
+    public static function rotasQueHojeFalham(): array
     {
         return [
             'listar funcionarios chama metodo que nao existe' => ['GET', '/api/employee', []],

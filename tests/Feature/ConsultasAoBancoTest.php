@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\ApiTestCase;
 
 /**
@@ -50,9 +51,7 @@ class ConsultasAoBancoTest extends ApiTestCase
         }
     }
 
-    /**
-     * @dataProvider rotasQueListamClientes
-     */
+    #[DataProvider('rotasQueListamClientes')]
     public function test_quantidade_de_consultas_nao_depende_do_tamanho_da_carteira(string $uri)
     {
         [$vendedorPequeno, $tokenPequeno] = $this->criarUsuarioAutenticado();
@@ -66,7 +65,7 @@ class ConsultasAoBancoTest extends ApiTestCase
         $this->assertSame($comPoucos, $comMuitos);
     }
 
-    public function rotasQueListamClientes(): array
+    public static function rotasQueListamClientes(): array
     {
         return [
             'listagem completa' => ['/api/customers?'.self::TODOS_OS_STATUS],
