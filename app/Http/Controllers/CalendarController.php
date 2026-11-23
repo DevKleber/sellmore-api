@@ -18,6 +18,8 @@ class CalendarController extends Controller
         if (!$calendar) {
             return response(['response' => 'Não existe Calendar'], 400);
         }
+        $telefonesPorCliente = \App\Phone::agrupadosPorCliente($calendar->pluck('id_customer')->unique()->all());
+
         $ar = [];
         foreach ($calendar as $key => $value) {
             $end_date = date('Y/m/d H:i:s', strtotime("{$value->date} +30 minute"));
@@ -25,11 +27,8 @@ class CalendarController extends Controller
                 $end_date = $value->date_end;
             }
             $hour = date('H:i:s', strtotime("{$value->date}"));
-            $cutomersPhone = \App\Phone::where('id_customers', $value->id_customer)->select('phone')->get();
-            $arNumbers = [];
-            foreach ($cutomersPhone as $keyPhone => $valuePhone) {
-                $arNumbers[] = $valuePhone->phone;
-            }
+            $arNumbers = $telefonesPorCliente->get($value->id_customer, collect())->pluck('phone')->all();
+
             $numbersPhone = implode(',', $arNumbers);
 
             $startDate = str_replace('-', '/', $value->date);

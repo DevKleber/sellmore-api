@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 
 class CustomersController extends Controller
 {
+    private const MAXIMO_DE_NIVEIS_DA_ARVORE = 5;
+
     public function index(Request $request)
     {
         $options['boShowProblemasCartao'] = $request->input('boShowProblemasCartao');
@@ -16,6 +18,8 @@ class CustomersController extends Controller
         $options['boShowAberto'] = $request->input('boShowAberto');
 
         $options['orderBy'] = !empty($request->input('orderBy')) ? json_decode($request->input('orderBy')): null;
+        $options['page'] = $request->input('page');
+        $options['perPage'] = $request->input('perPage');
 
         $arCustomers = \App\Customers::getAll($options);
 
@@ -46,20 +50,7 @@ class CustomersController extends Controller
             ->select('customers.*')
             ->get();
 
-        $arCustomers = [];
-        foreach ($customers as $key => $value) {
-            $arCustomers[$value->id] = $value;
-        }
-
-        $ar = [];
-        $index =0;
-        foreach ($arCustomers as $key => $value) {
-            $ar[$index] = $value;
-            $ar[$index]['phones'] = \App\Phone::where('id_customers', $value->id)->get();
-            $index++;
-        }
-
-        return $ar;
+        return $this->comTelefones($customers->unique('id')->values());
     }
 
     public function getCustomersLd()
@@ -70,47 +61,48 @@ class CustomersController extends Controller
             ->orderBy('name')
             ->get()
         ;
-        $ar = [];
-        foreach ($arCustomers as $key => $value) {
-            $ar[$key] = $value;
-            $ar[$key]['phones'] = \App\Phone::where('id_customers', $value->id)->get();
-        }
 
-        if (!$arCustomers) {
-            return response(['response' => 'Não existe Customers'], 200);
-        }
-
-        return response($ar);
+        return response($this->comTelefones($arCustomers));
     }
 
+    /**
+     * Do cliente informado ate o primeiro lead da cadeia de indicacoes, limitado a alguns niveis.
+     */
     public function getAllParents($id)
     {
         $id_usuario = auth('api')->user()->id;
-        $arCustomers = \App\Customers::where('id_usuario', $id_usuario)->get();
-        $ar = [];
-        foreach ($arCustomers as $key => $value) {
-            $ar[$value->id] = $value;
+        $parents = collect();
+        $proximoId = $id;
+
+        while ($proximoId && $parents->count() < self::MAXIMO_DE_NIVEIS_DA_ARVORE) {
+            $cliente = \App\Customers::where('id_usuario', $id_usuario)->where('id', $proximoId)->first();
+            if (!$cliente) {
+                break;
+            }
+
+            $parents->push($cliente);
+            $proximoId = $cliente->id_parent;
         }
 
-        $parents = $this->buildTree($ar, $id);
-        $ar = [];
-        foreach ($parents as $key => $value) {
-            $ar[$key] = $value;
-            $ar[$key]['phones'] = $value;
-            $ar[$key]['phones'] = \App\Phone::where('id_customers', $value->id)->get();
+        if ($parents->isEmpty()) {
+            return response(['response' => 'Referido não encontrado'], 400);
         }
 
-        return $parents;
+        return $this->comTelefones($parents);
     }
 
-    public function buildTree($ar, $id, $branch = [])
+    /**
+     * Acrescenta a cada cliente a lista de telefones, buscando todos em uma unica consulta.
+     */
+    private function comTelefones($clientes)
     {
-        if (!$id || 5 == count($branch)) {
-            return $branch;
-        }
-        $branch[] = $ar[$id];
+        $telefones = \App\Phone::agrupadosPorCliente($clientes->pluck('id')->all());
 
-        return $this->buildTree($ar, $ar[$id]['id_parent'], $branch);
+        foreach ($clientes as $cliente) {
+            $cliente->phones = $telefones->get($cliente->id, collect());
+        }
+
+        return $clientes;
     }
 
     public function importContact(Request $request, $id)

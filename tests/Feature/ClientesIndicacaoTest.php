@@ -56,4 +56,40 @@ class ClientesIndicacaoTest extends ApiTestCase
         $this->assertCount(self::LIMITE_DE_NIVEIS, $resposta->json());
         $this->assertSame(['N7', 'N6', 'N5', 'N4', 'N3'], array_column($resposta->json(), 'name'));
     }
+
+    public function test_arvore_de_cliente_inexistente_e_recusada()
+    {
+        [, $token] = $this->criarUsuarioAutenticado();
+
+        $resposta = $this->chamarApi('GET', '/api/parents/customers/999', [], $token);
+
+        $resposta->assertStatus(400)->assertExactJson(['response' => 'Referido não encontrado']);
+    }
+
+    public function test_arvore_de_cliente_de_outro_usuario_e_recusada()
+    {
+        [, $token] = $this->criarUsuarioAutenticado();
+        $outro = $this->criarUsuario();
+        $clienteDoOutro = $this->criarCliente($outro['id']);
+
+        $resposta = $this->chamarApi('GET', "/api/parents/customers/{$clienteDoOutro['id']}", [], $token);
+
+        $resposta->assertStatus(400)->assertExactJson(['response' => 'Referido não encontrado']);
+    }
+
+    /**
+     * Quem indicou pode ter sido apagado ou pertencer a outro usuario; a arvore termina ali.
+     */
+    public function test_arvore_para_quando_quem_indicou_nao_e_do_usuario()
+    {
+        [$usuario, $token] = $this->criarUsuarioAutenticado();
+        $outro = $this->criarUsuario();
+        $clienteDoOutro = $this->criarCliente($outro['id'], ['name' => 'Do Outro']);
+        $referido = $this->criarCliente($usuario['id'], ['name' => 'Meu Referido', 'id_parent' => $clienteDoOutro['id']]);
+
+        $resposta = $this->chamarApi('GET', "/api/parents/customers/{$referido['id']}", [], $token);
+
+        $resposta->assertStatus(200);
+        $this->assertSame(['Meu Referido'], array_column($resposta->json(), 'name'));
+    }
 }

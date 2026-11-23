@@ -31,7 +31,6 @@ class RotasComDefeitoConhecidoTest extends ApiTestCase
             'alterar funcionario usa classes que nao existem' => ['PUT', '/api/employee/1', ['documents' => []]],
             'inativar funcionario grava coluna que nao existe' => ['DELETE', '/api/employee/1', []],
             'trocar senha logado tem assinatura incompativel com a rota' => ['PUT', '/api/auth/changePassword', ['newPassword' => 'x', 'confirmPassword' => 'x']],
-            'arvore de indicacao de cliente de outro usuario' => ['GET', '/api/parents/customers/999', []],
             'excluir compromisso inexistente' => ['DELETE', '/api/calendar/999', []],
         ];
     }

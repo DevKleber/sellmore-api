@@ -22,152 +22,159 @@ class Customers extends Model
             'c' => 'Comprou',
         ];
     }
-    public static function getAll($options=[])
+    private const STATUS_POR_FILTRO = [
+        'boShowAberto' => 'a',
+        'boShowProblemasCartao' => 'pc',
+        'boShowLigarDepois' => 'ld',
+        'boShowNaotemInteresse' => 'n',
+        'boShowComprou' => 'c',
+    ];
+
+    private const LEADS_POR_PAGINA_PADRAO = 8;
+    private const MAXIMO_DE_LEADS_POR_PAGINA = 50;
+
+    /**
+     * Leads do usuario logado, cada um com seus telefones e referidos.
+     * Sem "page" devolve todos; com "page" devolve so aquela pagina e o total de leads.
+     */
+    public static function getAll($options = [])
     {
-        $boShowProblemasCartao = $options['boShowProblemasCartao'] === 'true'? true: false;
-        $boShowLigarDepois = $options['boShowLigarDepois'] === 'true'? true: false;
-        $boShowNaotemInteresse = $options['boShowNaotemInteresse'] === 'true'? true: false;
-        $boShowComprou = $options['boShowComprou'] === 'true'? true: false;
-        $boShowAberto = $options['boShowAberto'] === 'true'? true: false;
-        $order = $options['orderBy'];
-
-        if (!self::hasAnyFilter($boShowProblemasCartao, $boShowLigarDepois, $boShowNaotemInteresse, $boShowComprou, $boShowAberto)) {
-            return[];
+        $statusSelecionados = self::statusSelecionados($options);
+        if (0 === count($statusSelecionados)) {
+            return [];
         }
 
-        $arPhones = self::getPhoneByUser();
-        $id_usuario = auth('api')->user()->id;
-        $arFather = [];
+        $idUsuario = auth('api')->user()->id;
+        $consultaDeLeads = self::consultaDeLeads($idUsuario, $options['orderBy'] ?? null);
+        $pagina = self::paginaPedida($options);
 
-        $parentsRootQuery = self::where('id_usuario', $id_usuario)
-            ->whereNull('id_parent')
-            // ->where('bo_ativo', true)
-            ->select('id');
-        if (isset($order->column) ) {
-            $parentsRootQuery->orderBy("{$order->column}", "{$order->type}");
-        }else{
-            $parentsRootQuery->orderBy('name');
+        $resposta = [];
+        if (null !== $pagina) {
+            $resposta['total'] = (clone $consultaDeLeads)->count();
+            $consultaDeLeads->forPage($pagina, self::leadsPorPagina($options));
         }
 
-        $parentsRoot = $parentsRootQuery->get();
-        foreach ($parentsRoot as $value) {
-            $arFather[$value->id] = $value->id;
-        }
+        $leads = $consultaDeLeads->get();
+        self::anexarReferidosETelefones($leads, $idUsuario, $statusSelecionados, null !== $pagina);
 
-        $parents = self::where('id_usuario', $id_usuario)
-            ->groupBy('id_parent')
-            ->select('id_parent')
-            ->whereNotNull('id_parent')
-            // ->where('bo_ativo', true)
-            ->get();
+        return ['arCustomers' => $leads->all(), 'statistics' => self::statistics()] + $resposta;
+    }
 
-        $parents->merge($parentsRoot);
-
-        foreach ($parents as $keyParents => $value) {
-            $arFather[$value->id_parent] = $value->id_parent;
-        }
-
-        $arTempFather = $arFather;
-        $arFather =[];
-
-        $arFatherQuery = self::select('id')
-            ->where('id_usuario', $id_usuario)
-            ->whereIn('id', array_values($arTempFather));
-            // ->orderBy('name')
-            // ->orderBy('id', 'desc')
-        if (isset($order->column) ) {
-            $arFatherQuery->orderBy("{$order->column}", "{$order->type}");
-        }else{
-            $arFatherQuery->orderBy('name');
-        }
-
-        $arFather = $arFatherQuery->get();
-
-
-        $arCustomers = [];
-        $count = 0;
-        foreach ($arFather as $key => $value) {
-            $customersParent = self::where('id_usuario', $id_usuario)
-                ->where('id', $value->id)
-                // ->where('bo_ativo', true)
-                ->first();
-            if (!$customersParent) {
-                continue;
+    private static function statusSelecionados($options)
+    {
+        $selecionados = [];
+        foreach (self::STATUS_POR_FILTRO as $filtro => $status) {
+            if ('true' === ($options[$filtro] ?? null)) {
+                $selecionados[] = $status;
             }
+        }
 
-            $queryReferidos = self::where('id_usuario', $id_usuario)
-                ->where('id_parent', $value->id)
-                ->where('bo_ativo', true);
+        return $selecionados;
+    }
 
-            $queryReferidos->where(function ($queryReferidos) use ($boShowProblemasCartao, $boShowLigarDepois, $boShowNaotemInteresse, $boShowComprou, $boShowAberto) {
-                if ($boShowProblemasCartao) {
-                    $queryReferidos->orWhere('status', 'pc');
-                }
-                if ($boShowLigarDepois) {
-                    $queryReferidos->orWhere('status', 'ld');
-                }
-                if ($boShowNaotemInteresse) {
-                    $queryReferidos->orWhere('status', 'n');
-                }
-                if ($boShowComprou) {
-                    $queryReferidos->orWhere('status', 'c');
-                }
-                if ($boShowAberto) {
-                    $queryReferidos->orWhere('status', 'a');
-                }
+    /**
+     * Um cliente aparece como lead quando nao foi indicado por ninguem ou quando ja indicou alguem.
+     */
+    private static function consultaDeLeads($idUsuario, $ordem)
+    {
+        $consulta = self::where('id_usuario', $idUsuario)
+            ->where(function ($leads) use ($idUsuario) {
+                $leads->whereNull('id_parent')
+                    ->orWhereIn('id', function ($quemIndicou) use ($idUsuario) {
+                        $quemIndicou->select('id_parent')
+                            ->from('customers')
+                            ->where('id_usuario', $idUsuario)
+                            ->whereNotNull('id_parent');
+                    });
             });
 
-
-            $queryReferidos->orderBy('status', 'asc')
-                ->orderBy('bo_preference', 'desc')
-                ->orderBy('name', 'asc');
-
-
-            $referidos = $queryReferidos->get();
-
-            $arCustomers[$key] = $customersParent;
-            // $arCustomers[$key]['phones'] = \App\Phone::where('id_customers', $customersParent->id)->get();
-            $arCustomers[$key]['phones'] = $arPhones[$customersParent->id]??[];
-            $arCustomers[$key]['referidos'] = $referidos;
-            foreach ($arCustomers[$key]['referidos'] as $keyRef => $value) {
-                // $arCustomers[$key]['referidos'][$keyRef]['phones'] = \App\Phone::where('id_customers', $value->id)->get();
-                $arCustomers[$key]['referidos'][$keyRef]['phones'] = $arPhones[$value->id]??[];
-            }
-            ++$count;
+        if (isset($ordem->column)) {
+            return $consulta->orderBy("{$ordem->column}", "{$ordem->type}")->orderBy('id');
         }
 
-        return ['arCustomers' => $arCustomers, 'statistics' => self::statistics($arCustomers)];
+        return $consulta->orderBy('name')->orderBy('id');
     }
 
-    private static function hasAnyFilter($boShowProblemasCartao, $boShowLigarDepois, $boShowNaotemInteresse, $boShowComprou, $boShowAberto)
+    private static function paginaPedida($options)
     {
-        if (
-            $boShowProblemasCartao || $boShowLigarDepois || $boShowNaotemInteresse || $boShowComprou || $boShowAberto
-        ) {
-            return true;
-        }
-        return false;
+        $pagina = (int) ($options['page'] ?? 0);
+
+        return $pagina > 0 ? $pagina : null;
     }
 
-    public static function getPhoneByUser()
+    private static function leadsPorPagina($options)
+    {
+        $pedido = (int) ($options['perPage'] ?? 0);
+        if ($pedido <= 0) {
+            return self::LEADS_POR_PAGINA_PADRAO;
+        }
+
+        return min($pedido, self::MAXIMO_DE_LEADS_POR_PAGINA);
+    }
+
+    private static function anexarReferidosETelefones($leads, $idUsuario, $statusSelecionados, $somenteDestaPagina)
+    {
+        $referidosPorLead = self::referidosPorLead($leads->pluck('id')->all(), $idUsuario, $statusSelecionados);
+
+        $idsExibidos = $somenteDestaPagina
+            ? $leads->pluck('id')->merge($referidosPorLead->flatten()->pluck('id'))->all()
+            : null;
+        $telefones = self::getPhoneByUser($idsExibidos);
+
+        foreach ($leads as $lead) {
+            $referidos = $referidosPorLead->get($lead->id, collect());
+            foreach ($referidos as $referido) {
+                $referido->phones = $telefones[$referido->id] ?? [];
+            }
+
+            $lead->phones = $telefones[$lead->id] ?? [];
+            $lead->referidos = $referidos;
+        }
+    }
+
+    private static function referidosPorLead($idsDosLeads, $idUsuario, $statusSelecionados)
+    {
+        return self::where('id_usuario', $idUsuario)
+            ->whereIn('id_parent', $idsDosLeads)
+            ->where('bo_ativo', true)
+            ->whereIn('status', $statusSelecionados)
+            ->orderBy('status', 'asc')
+            ->orderBy('bo_preference', 'desc')
+            ->orderBy('name', 'asc')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('id_parent');
+    }
+
+    /**
+     * Telefones agrupados por cliente. Sem ids, traz os de todos os clientes do usuario logado.
+     */
+    public static function getPhoneByUser($idsDosClientes = null)
     {
         $idUsuario = auth('api')->user()->id;
 
-        $customersPhones = \App\Customers::join('customers_phone', 'customers_phone.id_customers', '=', 'customers.id')
-                ->where('id_usuario', $idUsuario)
-                ->select('customers.id_usuario', 'customers_phone.*')
-                ->get();
+        $consulta = \App\Customers::join('customers_phone', 'customers_phone.id_customers', '=', 'customers.id')
+            ->where('id_usuario', $idUsuario)
+            ->select('customers.id_usuario', 'customers_phone.*')
+            ->orderBy('customers_phone.id');
+
+        if (null !== $idsDosClientes) {
+            $consulta->whereIn('customers.id', $idsDosClientes);
+        }
 
         $arPhones = [];
-        foreach ($customersPhones as $phone) {
+        foreach ($consulta->get() as $phone) {
             $arPhones[$phone->id_customers][] = $phone;
         }
+
         return $arPhones;
     }
 
-    public static function statistics($arCustomers)
+    /**
+     * Quantos clientes ha em cada status. Vendas contam mesmo arquivadas; os demais, so os ativos.
+     */
+    public static function statistics()
     {
-        $id_usuario = auth('api')->user()->id;
         $statistics = [
             'a' => 0,
             'pc' => 0,
@@ -175,14 +182,16 @@ class Customers extends Model
             'n' => 0,
             'c' => 0,
         ];
-        $customers = self::where('id_usuario', $id_usuario)->get();
-        foreach ($customers as $key => $value) {
-            if ('c' == $value['status']) {
-                ++$statistics[$value['status']];
-            } else {
-                if ($value['bo_ativo']) {
-                    ++$statistics[$value['status']];
-                }
+
+        $contagens = self::where('id_usuario', auth('api')->user()->id)
+            ->selectRaw('status, bo_ativo, count(*) as total')
+            ->groupBy('status', 'bo_ativo')
+            ->get();
+
+        foreach ($contagens as $contagem) {
+            $conta = 'c' == $contagem->status || $contagem->bo_ativo;
+            if ($conta && array_key_exists($contagem->status, $statistics)) {
+                $statistics[$contagem->status] += (int) $contagem->total;
             }
         }
 

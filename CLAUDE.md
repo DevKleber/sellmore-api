@@ -50,6 +50,8 @@ docker compose exec api php artisan migrate       # migrations no banco local
 - `app/Http/Helpers.php`: classe global `Helpers`, carregada pelo `composer.json` (`autoload.files`). Datas, telefones, CPF, identificação de navegador.
 - `app/Library/`: integrações externas (Trello em `Jira.php`, CEP, CNPJ). Só o Trello é usado pelas rotas.
 - `app/Console/BloqueioDeComandosDestrutivos.php`: impede comandos que apagam tabelas fora do banco de testes.
+- `GET /api/customers` aceita `page` e `perPage` (padrão 8, máximo 50) e, nesse caso, devolve também `total`; sem `page`, devolve todos os leads. O front sempre pagina.
+- **Cuidado com consultas dentro de laços**: listagem, busca, "ligar depois", agenda e árvore de indicação buscam telefones e referidos em lote (`Phone::agrupadosPorCliente`, `Customers::getAll`). `ConsultasAoBancoTest` falha se o número de consultas voltar a crescer com a quantidade de clientes.
 - Respostas seguem o formato `{"response": "mensagem"}` para avisos e `{"dados": ...}` para conteúdo, com status 400 para erro de regra.
 
 ## Banco e migrations
