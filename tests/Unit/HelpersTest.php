@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use Helpers;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class HelpersTest extends TestCase
@@ -21,15 +22,13 @@ class HelpersTest extends TestCase
         parent::tearDown();
     }
 
-    /**
-     * @dataProvider valoresParaContar
-     */
+    #[DataProvider('valoresParaContar')]
     public function test_count_conta_listas_e_trata_valores_soltos($valor, int $esperado)
     {
         $this->assertSame($esperado, Helpers::count($valor));
     }
 
-    public function valoresParaContar(): array
+    public static function valoresParaContar(): array
     {
         return [
             'lista com itens' => [[1, 2, 3], 3],
@@ -52,15 +51,13 @@ class HelpersTest extends TestCase
         $this->assertFalse(Helpers::validarExt('exe', ['jpg', 'png']));
     }
 
-    /**
-     * @dataProvider datasBrasileiras
-     */
+    #[DataProvider('datasBrasileiras')]
     public function test_converte_data_brasileira_para_o_banco($entrada, $esperado)
     {
         $this->assertSame($esperado, Helpers::convertdateBr2DB($entrada));
     }
 
-    public function datasBrasileiras(): array
+    public static function datasBrasileiras(): array
     {
         return [
             'dia mes ano com barras' => ['20/05/2030', '2030-05-20'],
@@ -70,15 +67,13 @@ class HelpersTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider datasSemSeparador
-     */
+    #[DataProvider('datasSemSeparador')]
     public function test_converte_data_digitada_sem_separador(string $entrada, string $esperado)
     {
         $this->assertSame($esperado, Helpers::convertDateWithoutSeparatorToDatabase($entrada));
     }
 
-    public function datasSemSeparador(): array
+    public static function datasSemSeparador(): array
     {
         return [
             'so digitos' => ['20052030', '2030-05-20'],
@@ -104,15 +99,13 @@ class HelpersTest extends TestCase
         $this->assertSame('RuaA10', Helpers::removerCaracteresEspeciaisEspacos('Rua A, 10'));
     }
 
-    /**
-     * @dataProvider cpfs
-     */
+    #[DataProvider('cpfs')]
     public function test_valida_cpf(string $cpf, bool $valido)
     {
         $this->assertSame($valido, Helpers::validarCpf($cpf));
     }
 
-    public function cpfs(): array
+    public static function cpfs(): array
     {
         return [
             'valido sem mascara' => ['52998224725', true],
@@ -123,15 +116,13 @@ class HelpersTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider numerosDeTelefone
-     */
+    #[DataProvider('numerosDeTelefone')]
     public function test_acrescenta_nono_digito_em_celulares_de_dez_digitos(string $numero, $esperado)
     {
         $this->assertSame($esperado, Helpers::numeroNonoDigito($numero));
     }
 
-    public function numerosDeTelefone(): array
+    public static function numerosDeTelefone(): array
     {
         return [
             'celular com dez digitos ganha o nove' => ['6299990001', '62999990001'],
@@ -148,9 +139,7 @@ class HelpersTest extends TestCase
         $this->assertSame('Sem emoji', Helpers::remove_emoji('Sem emoji'));
     }
 
-    /**
-     * @dataProvider sistemasOperacionais
-     */
+    #[DataProvider('sistemasOperacionais')]
     public function test_identifica_o_sistema_pelo_user_agent(string $userAgent, string $esperado)
     {
         $_SERVER['HTTP_USER_AGENT'] = $userAgent;
@@ -158,7 +147,7 @@ class HelpersTest extends TestCase
         $this->assertSame($esperado, Helpers::getOSClient());
     }
 
-    public function sistemasOperacionais(): array
+    public static function sistemasOperacionais(): array
     {
         return [
             'windows' => ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Windows'],
@@ -170,9 +159,7 @@ class HelpersTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider navegadores
-     */
+    #[DataProvider('navegadores')]
     public function test_identifica_o_navegador_pelo_user_agent(string $userAgent, string $esperado)
     {
         $_SERVER['HTTP_USER_AGENT'] = $userAgent;
@@ -180,7 +167,7 @@ class HelpersTest extends TestCase
         $this->assertSame($esperado, Helpers::get_browser_name());
     }
 
-    public function navegadores(): array
+    public static function navegadores(): array
     {
         return [
             'chrome' => ['Mozilla/5.0 AppleWebKit/537.36 Chrome/120.0 Safari/537.36', 'Chrome'],

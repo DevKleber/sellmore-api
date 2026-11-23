@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Versao usada para montar o vendor; precisa atender ao "php" do composer.json.
-  PHP_VERSION: '7.4'
+  # Versao usada para montar o vendor. A do site em producao e definida em deploy/versao-do-php.
+  PHP_VERSION: '8.5'
   DEPLOY_HOST: wiseller.com.br
   # A chave de deploy so envia arquivos para a pasta da API ("." e a raiz dela) e pede as migrations.
   DEPLOY_PATH: .
@@ -35,13 +35,8 @@ jobs:
           tools: composer:v2
           coverage: none
 
-      # Mesmo conjunto de pacotes que ja esta em producao (com os de desenvolvimento).
       - name: Instalar dependencias
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader
-
-      # Em producao a raiz do site e a pasta do projeto, e o server.php faz o papel de index.php.
-      - name: Preparar entrada do site
-        run: mv server.php index.php
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
       - name: Configurar SSH
         env:
@@ -68,9 +63,9 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
             ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH"
 
-      # No servidor, este comando faz um backup completo do banco e so entao roda "artisan migrate".
-      # Se o backup falhar, nenhuma migration e executada e o deploy fica vermelho.
-      - name: Aplicar migrations
+      # No servidor, este comando ajusta a versao do PHP do site (deploy/versao-do-php), faz um backup
+      # completo do banco e so entao roda "artisan migrate". Se o backup falhar, nada e executado.
+      - name: Ajustar PHP e aplicar migrations
         env:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" migrar

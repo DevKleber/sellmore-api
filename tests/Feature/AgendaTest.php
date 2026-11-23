@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\ApiTestCase;
 
 class AgendaTest extends ApiTestCase
@@ -46,9 +47,7 @@ class AgendaTest extends ApiTestCase
         $this->assertEquals(1, $gravado['bo_ativo']);
     }
 
-    /**
-     * @dataProvider formatosDeData
-     */
+    #[DataProvider('formatosDeData')]
     public function test_agendar_aceita_data_em_varios_formatos(string $dataInformada)
     {
         [$usuario, $token] = $this->criarUsuarioAutenticado();
@@ -64,7 +63,7 @@ class AgendaTest extends ApiTestCase
         $this->assertSame('2030-05-20 09:15:00', $this->registro('calendar', $resposta->json('dados.id'))['date']);
     }
 
-    public function formatosDeData(): array
+    public static function formatosDeData(): array
     {
         return [
             'com tracos' => ['2030-05-20'],

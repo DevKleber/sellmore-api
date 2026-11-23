@@ -4,13 +4,13 @@ API do Wiseller, um CRM simples para vendedores acompanharem leads e os contatos
 
 ## Stack
 
-- Laravel 7.17, PHP `^7.2.5` no `composer.json`.
-- Autenticação por JWT (`tymon/jwt-auth`), guard `api`.
+- Laravel 13, PHP 8.5 (o `composer.json` aceita 8.3 ou mais novo).
+- Autenticação por JWT (`tymon/jwt-auth` 2), guard `api`.
 - MySQL 5.7.
-- `intervention/image` para miniaturas de upload.
+- `intervention/image` 4 para miniaturas de upload.
 - Sem filas, sem agendamentos, sem Redis (cache e sessão em arquivo, fila `sync`).
 
-**Atenção à versão do PHP**: produção roda PHP 8.0, que o Laravel 7 não suporta. O ambiente local roda 7.4. Rotas de `Route::resource` com `{id}` e requisições com parâmetro vazio na query string funcionam em 7.4 e dão erro 500 em 8.0. A atualização do framework está planejada; até lá, valide qualquer mudança nas duas versões.
+O projeto foi atualizado do Laravel 7 em 2026-11. Os models continuam em `App\` (não em `App\Models`), e o `App\User` precisa manter esse nome: ele entra na assinatura dos tokens de login já emitidos.
 
 ## Como rodar
 
@@ -24,7 +24,6 @@ docker compose exec api php artisan migrate       # migrations no banco local
 
 - API em `http://localhost:8000`, MySQL em `localhost:3306` (banco `wiseller`), Mailpit em `http://localhost:8025`.
 - O `.env` é criado na primeira subida do container; `APP_KEY` e `JWT_SECRET` são gerados sozinhos.
-- Para rodar a suíte em PHP 8.0, use uma imagem `php:8.0-cli` com `pdo_mysql` e `gd` na mesma rede do compose.
 
 ## Domínio
 
@@ -45,6 +44,8 @@ docker compose exec api php artisan migrate       # migrations no banco local
 
 ## Estrutura
 
+- `bootstrap/app.php`: registro das rotas, do apelido `apiJwt` e do limite de 60 requisições por minuto da API. Não há mais `Kernel` nem `RouteServiceProvider`.
+- `config/`: os arquivos aceitam também os nomes antigos de variável (`CACHE_DRIVER`, `FILESYSTEM_DRIVER`), porque o `.env` de produção não é tocado pelo deploy.
 - `routes/api.php`: todas as rotas. Públicas no topo; o restante dentro do grupo com o middleware `apiJwt` (`app/Http/Middleware/apiProtectededRoute.php`), que responde 400 quando o token falta ou é inválido.
 - `app/Http/Controllers/`: um controller por recurso. A regra de negócio está neles e nos models em `app/` (métodos estáticos).
 - `app/Http/Helpers.php`: classe global `Helpers`, carregada pelo `composer.json` (`autoload.files`). Datas, telefones, CPF, identificação de navegador.
@@ -78,21 +79,23 @@ docker compose exec api vendor/bin/phpunit --filter ClientesCadastro
 - `tests/Support/ChamaApi.php` limpa a autenticação entre requisições do mesmo teste; use sempre `chamarApi()` e `enviarArquivoParaApi()` em vez de `$this->json()` direto.
 - Nenhum teste envia e-mail (`Mail::fake()`, `MAIL_MAILER=array`) nem chama o Trello (`API_TRELLO_URL` aponta para um endereço que não responde no `phpunit.xml`).
 - `RotasComDefeitoConhecidoTest` registra rotas que hoje dão erro 500. Ao consertar uma, tire-a de lá e escreva o teste do comportamento correto.
-- Os testes descrevem o comportamento correto, que é o do PHP 7.4. Não ajuste um teste para aceitar um erro 500 que só existe em PHP 8.0.
+- PHPUnit 12: provedor de dados é método `public static` e é ligado ao teste pelo atributo `#[DataProvider('nome')]`, não por comentário.
 
 ## Deploy
 
 `.github/workflows/deploy.yml`: todo push em `master` ou `main` publica em produção.
 
-1. Monta o `vendor` com Composer.
-2. Renomeia `server.php` para `index.php`, porque em produção a raiz do site é a pasta do projeto, não `public/`.
-3. Envia por `rsync` com `--delete`. Ficam preservados no servidor: arquivos com ponto na raiz (`.env`, `.htaccess`), `storage/`, `img/`, `public/img/` e os `error_log`.
-4. Pede ao servidor as migrations (backup antes).
-5. Confere `GET /api/currentVersion`.
+1. Monta o `vendor` com Composer, sem pacotes de desenvolvimento.
+2. Envia por `rsync` com `--delete`. Ficam preservados no servidor: arquivos com ponto na raiz (`.env`, `.htaccess`), `storage/`, `img/`, `public/img/` e os `error_log`.
+3. Pede ao servidor o fechamento do deploy: ele troca a versão do PHP do site se `deploy/versao-do-php` pedir outra, faz o backup do banco e roda as migrations.
+4. Confere `GET /api/currentVersion`.
+
+Em produção a raiz do site é a pasta do projeto, não `public/`; por isso existe o `index.php` na raiz, que só repassa para `public/index.php`.
 
 Consequências práticas:
 
 - Variável nova no `.env` precisa ser criada à mão no servidor; o deploy não toca no `.env`.
+- Para mudar a versão do PHP de produção, altere `deploy/versao-do-php` (formato do cPanel, hoje `ea-php85`) junto com o `PHP_VERSION` do workflow e a imagem do Docker local.
 - Uploads são gravados em `img/<pasta>` (relativo à raiz do projeto) e em `storage/app/public`. Se criar outro local de upload, proteja-o no workflow.
 - A versão exibida ao usuário está fixa na rota `currentVersion` em `routes/api.php`; atualize-a ao publicar algo que o usuário perceba.
 

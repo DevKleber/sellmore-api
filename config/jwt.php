@@ -10,6 +10,7 @@
  */
 
 return [
+
     /*
     |--------------------------------------------------------------------------
     | JWT Authentication Secret
@@ -44,6 +45,7 @@ return [
     */
 
     'keys' => [
+
         /*
         |--------------------------------------------------------------------------
         | Public Key
@@ -80,6 +82,7 @@ return [
         */
 
         'passphrase' => env('JWT_PASSPHRASE'),
+
     ],
 
     /*
@@ -126,12 +129,9 @@ return [
     |
     | Specify the hashing algorithm that will be used to sign the token.
     |
-    | See here: https://github.com/namshi/jose/tree/master/src/Namshi/JOSE/Signer/OpenSSL
-    | for possible values.
-    |
     */
 
-    'algo' => env('JWT_ALGO', 'HS256'),
+    'algo' => env('JWT_ALGO', Tymon\JWTAuth\Providers\JWT\Provider::ALGO_HS256),
 
     /*
     |--------------------------------------------------------------------------
@@ -262,6 +262,7 @@ return [
     */
 
     'providers' => [
+
         /*
         |--------------------------------------------------------------------------
         | JWT Provider
@@ -294,5 +295,7 @@ return [
         */
 
         'storage' => Tymon\JWTAuth\Providers\Storage\Illuminate::class,
+
     ],
+
 ];

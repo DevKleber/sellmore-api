@@ -4,10 +4,12 @@ namespace App;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Intervention\Image\Facades\Image;
+use Intervention\Image\Laravel\Facades\Image;
 
 class Arquivo extends Model
 {
+    private const LADO_DA_MINIATURA = 200;
+
     public static function saveFile($file, $folder)
     {
         return self::send($file, $folder);
@@ -45,7 +47,7 @@ class Arquivo extends Model
 
         $name = storage_path().'/app/public/'.$path.'/'.$filename.'_min.'.$extension;
 
-        if (Image::make($file)->fit(200, 200)->save($name)) {
+        if (Image::decode($file)->cover(self::LADO_DA_MINIATURA, self::LADO_DA_MINIATURA)->save($name)) {
             $caminho = 'public/storage/'.$path.'/'.$filename.'_min.'.$extension;
             if ($caminho) {
                 return $caminho;
