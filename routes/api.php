@@ -1,5 +1,13 @@
 <?php
 
+use App\Http\Controllers\ArquivoController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\CustomersController;
+use App\Http\Controllers\FuncionarioController;
+use App\Http\Controllers\LogController;
+use App\Http\Controllers\StrategyController;
+use App\Http\Controllers\TrelloController;
 use Illuminate\Support\Facades\Route;
 
 // Route::get('teste', function () {
@@ -15,14 +23,14 @@ use Illuminate\Support\Facades\Route;
 // });
 
 
-Route::post('auth/login', 'AuthController@login');
-Route::post('auth/recoverPassword', 'AuthController@recoverPassword');
-Route::get('auth/recoverPassword', 'AuthController@recoverPasswordAfterEmail');
-Route::put('auth/changePassoword', 'AuthController@recoverPasswordAfterEmail');
+Route::post('auth/login', [AuthController::class, 'login']);
+Route::post('auth/recoverPassword', [AuthController::class, 'recoverPassword']);
+Route::get('auth/recoverPassword', [AuthController::class, 'recoverPasswordAfterEmail']);
+Route::put('auth/changePassoword', [AuthController::class, 'recoverPasswordAfterEmail']);
 
-Route::post('user/new', 'FuncionarioController@store');
+Route::post('user/new', [FuncionarioController::class, 'store']);
 
-Route::post('issue', 'TrelloController@issue');
+Route::post('issue', [TrelloController::class, 'issue']);
 
 Route::get('currentVersion', function () {
     $version = '1.1.81';
@@ -30,31 +38,31 @@ Route::get('currentVersion', function () {
 });
 
 Route::group(['middleware' => 'apiJwt'], function () {
-    Route::resource('employee', 'FuncionarioController');
+    Route::resource('employee', FuncionarioController::class);
 
 
 
-    Route::post('auth/logout', 'AuthController@logout');
-    Route::post('auth/refresh', 'AuthController@refresh');
-    Route::get('auth/me', 'AuthController@me');
-    Route::put('auth/changePassword', 'AuthController@changePassword');
+    Route::post('auth/logout', [AuthController::class, 'logout']);
+    Route::post('auth/refresh', [AuthController::class, 'refresh']);
+    Route::get('auth/me', [AuthController::class, 'me']);
+    Route::put('auth/changePassword', [AuthController::class, 'changePassword']);
 
-    Route::post('file', 'ArquivoController@store');
+    Route::post('file', [ArquivoController::class, 'store']);
 
-    Route::resource('calendar', 'CalendarController');
+    Route::resource('calendar', CalendarController::class);
 
-    Route::get('search', 'CustomersController@customerSearch');
-    Route::resource('customers', 'CustomersController');
-    Route::put('customersActivate/{id}', 'CustomersController@activate');
-    Route::get('getCustomersLd', 'CustomersController@getCustomersLd');
-    Route::get('parents/customers/{id}', 'CustomersController@getAllParents');
-    Route::put('status/customers/{id}', 'CustomersController@changeStatus');
-    Route::post('import-contact/customers/{id}', 'CustomersController@importContact');
+    Route::get('search', [CustomersController::class, 'customerSearch']);
+    Route::resource('customers', CustomersController::class);
+    Route::put('customersActivate/{id}', [CustomersController::class, 'activate']);
+    Route::get('getCustomersLd', [CustomersController::class, 'getCustomersLd']);
+    Route::get('parents/customers/{id}', [CustomersController::class, 'getAllParents']);
+    Route::put('status/customers/{id}', [CustomersController::class, 'changeStatus']);
+    Route::post('import-contact/customers/{id}', [CustomersController::class, 'importContact']);
 
-    Route::post('preference', 'CustomersController@giveOrRemovePreference');
+    Route::post('preference', [CustomersController::class, 'giveOrRemovePreference']);
 
-    Route::get('strategy', 'StrategyController@index');
-    Route::put('strategy', 'StrategyController@update');
+    Route::get('strategy', [StrategyController::class, 'index']);
+    Route::put('strategy', [StrategyController::class, 'update']);
 
-    Route::resource('access_log', 'LogController');
+    Route::resource('access_log', LogController::class);
 });
