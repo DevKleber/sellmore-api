@@ -1,0 +1,72 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+env:
+  # Versao usada para montar o vendor; precisa atender ao "php" do composer.json.
+  PHP_VERSION: '7.4'
+  DEPLOY_HOST: wiseller.com.br
+  # A chave de deploy so enxerga a pasta da API no servidor; "." e a raiz dela.
+  DEPLOY_PATH: .
+  HEALTH_URL: https://apiwiseller.wiseller.com.br/api/currentVersion
+  HOST_KEY: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKhOUkK8Ib4xHzEsaqZU3Mas8+uKe4hsRYFKlybXjgld
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer:v2
+          coverage: none
+
+      # Mesmo conjunto de pacotes que ja esta em producao (com os de desenvolvimento).
+      - name: Instalar dependencias
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      # Em producao a raiz do site e a pasta do projeto, e o server.php faz o papel de index.php.
+      - name: Preparar entrada do site
+        run: mv server.php index.php
+
+      - name: Configurar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "$DEPLOY_HOST $HOST_KEY" > ~/.ssh/known_hosts
+
+      # Ficam fora do envio e da limpeza, porque so existem no servidor:
+      # arquivos com ponto na raiz (.env, .htaccess, .well-known), o storage, os error_log
+      # e os uploads, que o sistema grava em img/ (raiz) ou public/img/.
+      - name: Enviar para o servidor
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          rsync --recursive --links --times --compress --delete \
+            --exclude='/.*' \
+            --exclude='/storage/' \
+            --exclude='/img/' \
+            --exclude='error_log' \
+            --filter='protect /public/img/**' \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            ./ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH"
+
+      - name: Conferir API no ar
+        run: curl --fail --silent --show-error --output /dev/null "$HEALTH_URL"
