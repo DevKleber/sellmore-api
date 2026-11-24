@@ -38,6 +38,7 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'bo_lembrete_email' => 'boolean',
     ];
 
     // Rest omitted for brevity

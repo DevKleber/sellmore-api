@@ -3,6 +3,7 @@
 use App\Http\Controllers\ArquivoController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\ContaController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\FuncionarioController;
 use App\Http\Controllers\LogController;
@@ -60,6 +61,10 @@ Route::group(['middleware' => 'apiJwt'], function () {
 
     Route::get('resultados', [ResultadosController::class, 'doVendedor']);
     Route::get('metricas-de-uso', [ResultadosController::class, 'daPlataforma']);
+
+    Route::get('conta/exportar-clientes', [ContaController::class, 'exportarClientes']);
+    Route::put('conta/lembrete', [ContaController::class, 'alterarLembrete']);
+    Route::delete('conta', [ContaController::class, 'excluir']);
 
     Route::get('strategy', [StrategyController::class, 'index']);
     Route::put('strategy', [StrategyController::class, 'update']);
