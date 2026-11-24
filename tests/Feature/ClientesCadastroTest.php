@@ -151,10 +151,7 @@ class ClientesCadastroTest extends ApiTestCase
         $resposta->assertStatus(400)->assertExactJson(['response' => 'Não existe Customers']);
     }
 
-    /**
-     * A consulta por id nao confere o dono do cliente.
-     */
-    public function test_consulta_por_id_devolve_cliente_de_outro_usuario()
+    public function test_consulta_por_id_nao_devolve_cliente_de_outro_usuario()
     {
         [, $token] = $this->criarUsuarioAutenticado();
         $outro = $this->criarUsuario();
@@ -162,6 +159,6 @@ class ClientesCadastroTest extends ApiTestCase
 
         $resposta = $this->chamarApi('GET', "/api/customers/{$clienteDoOutro['id']}", [], $token);
 
-        $resposta->assertStatus(200)->assertJson(['name' => 'Do Outro']);
+        $resposta->assertStatus(400)->assertExactJson(['response' => 'Não existe Customers']);
     }
 }

@@ -38,21 +38,17 @@ Route::get('currentVersion', function () {
 });
 
 Route::group(['middleware' => 'apiJwt'], function () {
-    Route::resource('employee', FuncionarioController::class);
-
-
-
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::post('auth/refresh', [AuthController::class, 'refresh']);
     Route::get('auth/me', [AuthController::class, 'me']);
-    Route::put('auth/changePassword', [AuthController::class, 'changePassword']);
+    Route::put('auth/changePassword', [AuthController::class, 'trocarSenhaLogado']);
 
     Route::post('file', [ArquivoController::class, 'store']);
 
-    Route::resource('calendar', CalendarController::class);
+    Route::resource('calendar', CalendarController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
 
     Route::get('search', [CustomersController::class, 'customerSearch']);
-    Route::resource('customers', CustomersController::class);
+    Route::resource('customers', CustomersController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
     Route::put('customersActivate/{id}', [CustomersController::class, 'activate']);
     Route::get('getCustomersLd', [CustomersController::class, 'getCustomersLd']);
     Route::get('parents/customers/{id}', [CustomersController::class, 'getAllParents']);
@@ -64,5 +60,5 @@ Route::group(['middleware' => 'apiJwt'], function () {
     Route::get('strategy', [StrategyController::class, 'index']);
     Route::put('strategy', [StrategyController::class, 'update']);
 
-    Route::resource('access_log', LogController::class);
+    Route::resource('access_log', LogController::class)->only(['index', 'store']);
 });

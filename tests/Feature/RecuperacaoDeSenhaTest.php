@@ -10,18 +10,32 @@ use Tests\ApiTestCase;
 
 class RecuperacaoDeSenhaTest extends ApiTestCase
 {
-    private const CRIADO_EM = '2024-01-10 08:00:00';
     private const NOVA_SENHA = 'nova-senha-forte';
-    private const ID_FIXO_NO_LINK = '1';
-    private const ENDERECO_DO_FRONT = 'https://wiseller.com.br/request-recover-password';
+    private const LINK_INVALIDO = 'Link inválido ou já utilizado. Peça um novo.';
+    private const ENDERECO_DO_FRONT = 'https://app.wiseller.com.br/request-recover-password';
     private const VALIDADE_DO_LINK_EM_SEGUNDOS = 86400;
     private const TOLERANCIA_EM_SEGUNDOS = 120;
 
-    private function linkDeRecuperacao(array $usuario, string $validade = '+1 day', string $id = self::ID_FIXO_NO_LINK): array
+    /**
+     * Pede a recuperacao e devolve os parametros "url" e "token" do link que iria no e-mail.
+     */
+    private function linkDeRecuperacao(array $usuario): array
     {
-        $conteudo = ['email' => $usuario['email'], 'id' => $id, 'expired' => date('Y-m-d H:i:s', strtotime($validade))];
+        Mail::fake();
+        $this->chamarApi('POST', '/api/auth/recoverPassword', ['email' => $usuario['email']])->assertStatus(200);
+        parse_str(parse_url($this->dadosDoEmailEnviado()['link'], PHP_URL_QUERY), $parametros);
 
-        return ['url' => base64_encode(json_encode($conteudo)), 'token' => base64_encode(self::CRIADO_EM)];
+        return ['url' => $parametros['url'], 'token' => $parametros['token']];
+    }
+
+    private function conteudoDoLink(array $link): array
+    {
+        return json_decode(base64_decode($link['url']), true);
+    }
+
+    private function linkComConteudoTrocado(array $link, array $troca): array
+    {
+        return ['url' => base64_encode(json_encode($troca + $this->conteudoDoLink($link)))] + $link;
     }
 
     private function trocarSenha(array $link, string $nova = self::NOVA_SENHA, ?string $confirmacao = null)
@@ -56,23 +70,21 @@ class RecuperacaoDeSenhaTest extends ApiTestCase
         });
     }
 
-    public function test_link_do_email_aponta_para_o_front_e_carrega_email_id_fixo_e_validade_de_um_dia()
+    public function test_link_do_email_aponta_para_o_front_e_carrega_email_id_do_usuario_e_validade_de_um_dia()
     {
-        Mail::fake();
+        $this->criarUsuario();
         $usuario = $this->criarUsuario(['nome' => 'Maria Vendedora']);
         $antesDoPedido = time();
 
-        $this->chamarApi('POST', '/api/auth/recoverPassword', ['email' => $usuario['email']])->assertStatus(200);
+        $link = $this->linkDeRecuperacao($usuario);
 
         $dadosDoEmail = $this->dadosDoEmailEnviado();
+        $conteudo = $this->conteudoDoLink($link);
         $this->assertSame('Maria Vendedora', $dadosDoEmail['no_pessoa']);
-        parse_str(parse_url($dadosDoEmail['link'], PHP_URL_QUERY), $parametros);
-        $conteudo = json_decode(base64_decode($parametros['url']), true);
         $this->assertStringStartsWith(self::ENDERECO_DO_FRONT.'?url=', $dadosDoEmail['link']);
         $this->assertSame($usuario['email'], $conteudo['email']);
-        $this->assertSame(self::ID_FIXO_NO_LINK, $conteudo['id']);
+        $this->assertSame($usuario['id'], $conteudo['id']);
         $this->assertEqualsWithDelta($antesDoPedido + self::VALIDADE_DO_LINK_EM_SEGUNDOS, strtotime($conteudo['expired']), self::TOLERANCIA_EM_SEGUNDOS);
-        $this->assertSame(self::CRIADO_EM, base64_decode($parametros['token']));
     }
 
     private function dadosDoEmailEnviado(): array
@@ -97,6 +109,16 @@ class RecuperacaoDeSenhaTest extends ApiTestCase
             ->assertStatus(401);
     }
 
+    public function test_link_funciona_para_qualquer_usuario_e_nao_so_para_o_primeiro()
+    {
+        $this->criarUsuario();
+        $segundoUsuario = $this->criarUsuario();
+
+        $resposta = $this->trocarSenha($this->linkDeRecuperacao($segundoUsuario));
+
+        $resposta->assertStatus(200)->assertJson(['me' => ['id' => $segundoUsuario['id']]]);
+    }
+
     public function test_link_tambem_e_aceito_por_get()
     {
         $usuario = $this->criarUsuario();
@@ -107,23 +129,70 @@ class RecuperacaoDeSenhaTest extends ApiTestCase
         $resposta->assertStatus(200)->assertJsonStructure(['access_token']);
     }
 
+    public function test_link_deixa_de_valer_depois_de_usado()
+    {
+        $usuario = $this->criarUsuario();
+        $link = $this->linkDeRecuperacao($usuario);
+        $this->trocarSenha($link)->assertStatus(200);
+
+        $resposta = $this->trocarSenha($link, 'outra-senha-forte');
+
+        $resposta->assertStatus(400)->assertExactJson(['response' => self::LINK_INVALIDO]);
+    }
+
     public function test_link_expirado_e_recusado()
     {
         $usuario = $this->criarUsuario();
+        $link = $this->linkDeRecuperacao($usuario);
 
-        $resposta = $this->trocarSenha($this->linkDeRecuperacao($usuario, '-1 minute'));
+        $this->travel(2)->days();
+        $resposta = $this->trocarSenha($link);
 
         $resposta->assertStatus(400)->assertExactJson(['response' => 'Link expirado']);
     }
 
-    public function test_token_que_nao_confere_com_a_data_de_criacao_e_recusado()
+    public function test_validade_alterada_no_link_e_recusada()
     {
         $usuario = $this->criarUsuario();
-        $link = ['token' => base64_encode('2020-01-01 00:00:00')] + $this->linkDeRecuperacao($usuario);
+        $link = $this->linkComConteudoTrocado($this->linkDeRecuperacao($usuario), ['expired' => '2099-01-01 00:00:00']);
 
         $resposta = $this->trocarSenha($link);
 
-        $resposta->assertStatus(400)->assertExactJson(['response' => 'Error']);
+        $resposta->assertStatus(400)->assertExactJson(['response' => self::LINK_INVALIDO]);
+    }
+
+    /**
+     * Antes o link nao era assinado: quem soubesse o e-mail e a data de cadastro montava um link valido.
+     */
+    public function test_link_montado_por_terceiro_com_os_dados_de_outro_usuario_e_recusado()
+    {
+        $vitima = $this->criarUsuario();
+        $conteudo = ['email' => $vitima['email'], 'id' => $vitima['id'], 'expired' => '2099-01-01 00:00:00'];
+        $linkForjado = ['url' => base64_encode(json_encode($conteudo)), 'token' => base64_encode($vitima['created_at'])];
+
+        $resposta = $this->trocarSenha($linkForjado);
+
+        $resposta->assertStatus(400)->assertExactJson(['response' => self::LINK_INVALIDO]);
+        $this->chamarApi('POST', '/api/auth/login', ['email' => $vitima['email'], 'password' => $vitima['senha']])
+            ->assertStatus(200);
+    }
+
+    public function test_link_de_um_usuario_nao_troca_a_senha_de_outro()
+    {
+        $dono = $this->criarUsuario();
+        $vitima = $this->criarUsuario();
+        $link = $this->linkComConteudoTrocado($this->linkDeRecuperacao($dono), ['email' => $vitima['email'], 'id' => $vitima['id']]);
+
+        $resposta = $this->trocarSenha($link);
+
+        $resposta->assertStatus(400)->assertExactJson(['response' => self::LINK_INVALIDO]);
+    }
+
+    public function test_link_sem_conteudo_e_recusado()
+    {
+        $resposta = $this->trocarSenha(['url' => 'nao-e-um-link', 'token' => 'x']);
+
+        $resposta->assertStatus(400)->assertExactJson(['response' => self::LINK_INVALIDO]);
     }
 
     public function test_confirmacao_diferente_da_senha_e_recusada()
@@ -147,19 +216,6 @@ class RecuperacaoDeSenhaTest extends ApiTestCase
 
     public static function senhasFracas(): array
     {
-        return [['123456'], ['password'], ['qwerty'], ['iloveyou']];
-    }
-
-    /**
-     * O link enviado por e-mail leva sempre o id "1", entao so o usuario de id 1 consegue concluir a troca.
-     */
-    public function test_link_gerado_pela_api_so_funciona_para_o_usuario_de_id_1()
-    {
-        $this->criarUsuario();
-        $segundoUsuario = $this->criarUsuario();
-
-        $resposta = $this->trocarSenha($this->linkDeRecuperacao($segundoUsuario));
-
-        $resposta->assertStatus(500);
+        return [['123456'], ['password'], ['qwerty'], ['iloveyou'], ['abc'], ['']];
     }
 }

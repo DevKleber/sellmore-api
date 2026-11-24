@@ -12,6 +12,11 @@ class Customers extends Model
     protected $fillable = ['name', 'phone', 'address', 'status', 'id_usuario', 'id_parent', 'observation', 'bo_ativo', 'bo_preference'];
 
 
+    public static function doUsuario($id, $idUsuario)
+    {
+        return self::where('id', $id)->where('id_usuario', $idUsuario)->first();
+    }
+
     public static function getStatus()
     {
         return [

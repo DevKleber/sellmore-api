@@ -10,6 +10,7 @@ class Funcionario extends Model
     protected $table = 'usuario';
     protected $primaryKey = 'id';
     protected $fillable = ['nome', 'email', 'usuario', 'password', 'bo_ativo'];
+    protected $hidden = ['password'];
 
     public static function getEmployeeByEmail($email)
     {

@@ -126,4 +126,34 @@ class AutenticacaoTest extends ApiTestCase
 
         $resposta->assertStatus(200);
     }
+
+    public function test_trocar_senha_logado_exige_a_senha_atual()
+    {
+        [$usuario, $token] = $this->criarUsuarioAutenticado();
+
+        $resposta = $this->chamarApi('PUT', '/api/auth/changePassword', [
+            'currentPassword' => 'senha-errada',
+            'newPassword' => 'nova-senha-forte',
+            'confirmPassword' => 'nova-senha-forte',
+        ], $token);
+
+        $resposta->assertStatus(400)->assertExactJson(['response' => 'A senha atual não confere']);
+        $this->chamarApi('POST', '/api/auth/login', ['email' => $usuario['email'], 'password' => $usuario['senha']])
+            ->assertStatus(200);
+    }
+
+    public function test_trocar_senha_logado_grava_a_nova_senha()
+    {
+        [$usuario, $token] = $this->criarUsuarioAutenticado();
+
+        $resposta = $this->chamarApi('PUT', '/api/auth/changePassword', [
+            'currentPassword' => $usuario['senha'],
+            'newPassword' => 'nova-senha-forte',
+            'confirmPassword' => 'nova-senha-forte',
+        ], $token);
+
+        $resposta->assertStatus(200)->assertJsonStructure(['access_token']);
+        $this->chamarApi('POST', '/api/auth/login', ['email' => $usuario['email'], 'password' => 'nova-senha-forte'])
+            ->assertStatus(200);
+    }
 }

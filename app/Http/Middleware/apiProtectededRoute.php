@@ -31,6 +31,10 @@ class apiProtectededRoute extends BaseMiddleware
             return response()->json(['error' => 'Authorization Token not found'], 400);
         }
 
+        if (!$user) {
+            return response()->json(['error' => 'Authorization Token not found'], 400);
+        }
+
         return $next($request);
     }
 }

@@ -8,6 +8,9 @@ use Validator;
 
 class AuthController extends Controller
 {
+    private const TAMANHO_MINIMO_DA_SENHA = 6;
+    private const LINK_INVALIDO = 'Link inválido ou já utilizado. Peça um novo.';
+
     /**
      * Get a JWT via given credentials.
      *
@@ -76,42 +79,58 @@ class AuthController extends Controller
     }
     public function recoverPasswordAfterEmail(Request $request)
     {
-
-        $url = $request['url'];
-        $token = $request['token'];
-
-
-        $criptDecode = json_decode(base64_decode($url));
-        $created_at = base64_decode($token);
-
-        $funcionario = \App\Funcionario::where('email', $criptDecode->email)->where('id', $criptDecode->id)->first();
-
-        if($funcionario->created_at != $created_at){
-            return response(['response' => 'Error'], 400);
+        $funcionario = $this->usuarioDoLinkDeRecuperacao((string) $request['url'], (string) $request['token']);
+        if (!$funcionario) {
+            return response(['response' => self::LINK_INVALIDO], 400);
         }
 
-
-        $expire = strtotime($criptDecode->expired);
-        $now = strtotime(date("Y-m-d H:i:s"));
-
-        if($now >= $expire){
+        $conteudo = json_decode(base64_decode($request['url']));
+        if (now()->timestamp >= strtotime($conteudo->expired ?? '')) {
             return response(['response' => 'Link expirado'], 400);
         }
 
-        try {
-            return $this->changePassword($funcionario, $request->all());
-        } catch (\Throwable $th) {
-            return response(['response' => $th->getMessage()], 400);
-        }
+        return $this->changePassword($funcionario, $request->all());
     }
 
-    public function changePassword($user,$dados)
+    /**
+     * So devolve o usuario quando o link foi assinado por esta API para ele.
+     */
+    private function usuarioDoLinkDeRecuperacao(string $url, string $assinatura)
     {
+        $conteudo = json_decode(base64_decode($url));
+        if (!isset($conteudo->email, $conteudo->id)) {
+            return null;
+        }
+
+        $funcionario = \App\Funcionario::where('email', $conteudo->email)->where('id', $conteudo->id)->first();
+        if (!$funcionario) {
+            return null;
+        }
+
+        $assinaturaEsperada = \App\User::assinaturaDoLinkDeRecuperacao($url, $funcionario);
+
+        return hash_equals($assinaturaEsperada, $assinatura) ? $funcionario : null;
+    }
+
+    public function trocarSenhaLogado(Request $request)
+    {
+        $usuario = auth('api')->user();
+        if (!\Hash::check((string) $request['currentPassword'], $usuario->password)) {
+            return response(['response' => 'A senha atual não confere'], 400);
+        }
+
+        return $this->changePassword($usuario, $request->all());
+    }
+
+    private function changePassword($user,$dados)
+    {
+        $dados += ['newPassword' => '', 'confirmPassword' => ''];
         if ($dados['newPassword'] != $dados['confirmPassword']) {
             return response(['response' => 'As senhas não conferem'], 400);
         }
 
-        if (in_array($dados['newPassword'], \App\User::getWorstPassword())) {
+        $senhaCurtaDemais = strlen((string) $dados['newPassword']) < self::TAMANHO_MINIMO_DA_SENHA;
+        if ($senhaCurtaDemais || in_array($dados['newPassword'], \App\User::getWorstPassword())) {
             return response(['response' => 'A senha informada é muito fraca'], 400);
         }
 

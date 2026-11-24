@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 class CustomersController extends Controller
 {
     private const MAXIMO_DE_NIVEIS_DA_ARVORE = 5;
+    private const CLIENTE_NAO_ENCONTRADO = 'Referido não encontrado';
 
     public function index(Request $request)
     {
@@ -107,8 +108,12 @@ class CustomersController extends Controller
 
     public function importContact(Request $request, $id)
     {
-        \DB::beginTransaction();
         $id_usuario = auth('api')->user()->id;
+        if (!\App\Customers::doUsuario($id, $id_usuario)) {
+            return response(['response' => self::CLIENTE_NAO_ENCONTRADO], 400);
+        }
+
+        \DB::beginTransaction();
         $contacts = \App\Customers::importContacts($request, $id);
         $duplicado = [];
         $imported = [];
@@ -188,6 +193,10 @@ class CustomersController extends Controller
         $request['id_usuario'] = $id_usuario;
         $request['status'] = ('' == $request['status'] || null == $request['status']) ? 'a' : $request['status'];
 
+        if (!$this->quemIndicouPertenceAoUsuario($request['id_parent'], $id_usuario)) {
+            return response(['response' => self::CLIENTE_NAO_ENCONTRADO], 400);
+        }
+
         try {
             \App\Customers::verifyCustomerExist($request['telefones'], $id_usuario);
         } catch (\Throwable $th) {
@@ -210,9 +219,21 @@ class CustomersController extends Controller
         return response(['response' => 'Salvo com sucesso', 'dados' => $customers]);
     }
 
+    /**
+     * Um cliente so pode ser indicado por outro cliente do mesmo vendedor.
+     */
+    private function quemIndicouPertenceAoUsuario($idDeQuemIndicou, $idUsuario)
+    {
+        if (empty($idDeQuemIndicou)) {
+            return true;
+        }
+
+        return null !== \App\Customers::doUsuario($idDeQuemIndicou, $idUsuario);
+    }
+
     public function show($id)
     {
-        $customers = \App\Customers::find($id);
+        $customers = \App\Customers::doUsuario($id, auth('api')->user()->id);
         if (!$customers) {
             return response(['response' => 'Não existe Customers'], 400);
         }
@@ -222,7 +243,7 @@ class CustomersController extends Controller
 
     public function changeStatus(Request $request, $id)
     {
-        $customers = \App\Customers::find($id);
+        $customers = \App\Customers::doUsuario($id, auth('api')->user()->id);
 
         if (!$customers) {
             return response(['response' => 'Customers Não encontrado'], 400);
@@ -240,10 +261,18 @@ class CustomersController extends Controller
 
     public function update(Request $request, $id)
     {
-        $customers = \App\Customers::find($id);
         $id_usuario = auth('api')->user()->id;
+        $customers = \App\Customers::doUsuario($id, $id_usuario);
+        if (!$customers) {
+            return response(['response' => self::CLIENTE_NAO_ENCONTRADO], 400);
+        }
+
+        if (!$this->quemIndicouPertenceAoUsuario($request['id_parent'], $id_usuario)) {
+            return response(['response' => self::CLIENTE_NAO_ENCONTRADO], 400);
+        }
 
         $request['status'] = ('' == $request['status'] || null == $request['status']) ? 'a' : $request['status'];
+        $request['id_usuario'] = $id_usuario;
 
         \DB::beginTransaction();
 
