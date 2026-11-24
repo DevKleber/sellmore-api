@@ -6,6 +6,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\FuncionarioController;
 use App\Http\Controllers\LogController;
+use App\Http\Controllers\ResultadosController;
 use App\Http\Controllers\StrategyController;
 use App\Http\Controllers\TrelloController;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +57,9 @@ Route::group(['middleware' => 'apiJwt'], function () {
     Route::post('import-contact/customers/{id}', [CustomersController::class, 'importContact']);
 
     Route::post('preference', [CustomersController::class, 'giveOrRemovePreference']);
+
+    Route::get('resultados', [ResultadosController::class, 'doVendedor']);
+    Route::get('metricas-de-uso', [ResultadosController::class, 'daPlataforma']);
 
     Route::get('strategy', [StrategyController::class, 'index']);
     Route::put('strategy', [StrategyController::class, 'update']);

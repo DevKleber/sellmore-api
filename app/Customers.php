@@ -17,6 +17,23 @@ class Customers extends Model
         return self::where('id', $id)->where('id_usuario', $idUsuario)->first();
     }
 
+    /**
+     * O painel de resultados conta atendimentos e vendas pela data em que o status mudou.
+     */
+    public function marcarMudancaDeStatus()
+    {
+        if ($this->isDirty('status')) {
+            $this->status_alterado_em = now();
+        }
+    }
+
+    protected static function booted()
+    {
+        static::creating(function (self $cliente) {
+            $cliente->status_alterado_em = $cliente->status_alterado_em ?? now();
+        });
+    }
+
     public static function getStatus()
     {
         return [

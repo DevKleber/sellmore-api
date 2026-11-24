@@ -251,6 +251,7 @@ class CustomersController extends Controller
 
         $dados = $request->only(['status']);
         $customers = Helpers::processarColunasUpdate($customers, $dados);
+        $customers->marcarMudancaDeStatus();
 
         if (!$customers->update()) {
             return response(['response' => 'Erro ao alterar'], 400);
@@ -292,6 +293,7 @@ class CustomersController extends Controller
         }
 
         $customers = Helpers::processarColunasUpdate($customers, $request->all());
+        $customers->marcarMudancaDeStatus();
         if (!$customers->update()) {
             \DB::rollBack();
 
