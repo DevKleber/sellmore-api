@@ -38,6 +38,7 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'bo_lembrete_email' => 'boolean',
     ];
 
     // Rest omitted for brevity
@@ -62,9 +63,11 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
+    private const VALIDADE_DO_LINK_EM_MINUTOS = 1440;
+
     public static function recoverPassword($request)
     {
-        $linkFront = "https://wiseller.com.br/request-recover-password";
+        $linkFront = config('wiseller.endereco_da_plataforma').'/request-recover-password';
         $funcionario = \App\Funcionario::getEmployeeByEmail($request['email']);
         if (!$funcionario) {
             return response(['response' => 'Não encontrado'], 400);
@@ -72,11 +75,11 @@ class User extends Authenticatable implements JWTSubject
 
         $link = [
             "email"=> $funcionario->email,
-            "id"=> "1",
-            "expired" => now()->addMinutes(1440)
+            "id"=> $funcionario->id,
+            "expired" => now()->addMinutes(self::VALIDADE_DO_LINK_EM_MINUTOS)->format('Y-m-d H:i:s')
         ];
         $cript = base64_encode(json_encode($link));
-        $token = base64_encode($funcionario->created_at);
+        $token = self::assinaturaDoLinkDeRecuperacao($cript, $funcionario);
 
         Mail::to($funcionario->email)->send(new SendMailRecover([
             'no_pessoa' => $funcionario->nome,
@@ -84,6 +87,14 @@ class User extends Authenticatable implements JWTSubject
         ]));
 
         return response(['response' => 'Enviamos um e-mail com o link para alteração de senha.']);
+    }
+
+    /**
+     * A senha atual entra na assinatura: depois da troca, o mesmo link deixa de valer.
+     */
+    public static function assinaturaDoLinkDeRecuperacao($conteudo, $funcionario)
+    {
+        return hash_hmac('sha256', $conteudo.'|'.$funcionario->password, config('app.key'));
     }
 
     public static function changePassword($request, $id_pessoa)

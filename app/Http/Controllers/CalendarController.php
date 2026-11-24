@@ -49,6 +49,9 @@ class CalendarController extends Controller
     {
         $request['bo_ativo'] = true;
         $request['id_usuario'] = auth('api')->user()->id;
+        if (!\App\Customers::doUsuario($request['id_customers'], $request['id_usuario'])) {
+            return response(['response' => 'Referido não encontrado'], 400);
+        }
         $date = Helpers::convertDateWithoutSeparatorToDatabase($request['date']);
         $hour = Helpers::convertHourWithoutSeparatorToDatabase($request['hour']);
         $request['date'] = "{$date} {$hour}";
@@ -82,9 +85,14 @@ class CalendarController extends Controller
         return response(['response' => 'Salvo com sucesso', 'dados' => $ar]);
     }
 
+    private function compromissoDoUsuarioLogado($id)
+    {
+        return \App\Calendar::where('id', $id)->where('id_usuario', auth('api')->user()->id)->first();
+    }
+
     public function show($id)
     {
-        $calendar = \App\Calendar::find($id);
+        $calendar = $this->compromissoDoUsuarioLogado($id);
         if (!$calendar) {
             return response(['response' => 'Não existe Calendar'], 400);
         }
@@ -94,7 +102,7 @@ class CalendarController extends Controller
 
     public function update(Request $request, $id)
     {
-        $calendar = \App\Calendar::find($id);
+        $calendar = $this->compromissoDoUsuarioLogado($id);
 
         $newStart = date("Y-m-d H:i:s", strtotime($request->newStart));
         $newEnd = date("Y-m-d H:i:s", strtotime($request->newEnd));
@@ -115,16 +123,14 @@ class CalendarController extends Controller
 
     public function destroy($id)
     {
-        $ususario = $request['id_usuario'] = auth('api')->user()->id;
         $calendar = \App\Calendar::find($id);
-
-        if($calendar->id_usuario !== $ususario) {
-            return response(['response' => 'Sem permissão para deletar esse contato.'], 400);
-        }
-
 
         if (!$calendar) {
             return response(['response' => 'Calendar Não encontrado'], 400);
+        }
+
+        if ($calendar->id_usuario !== auth('api')->user()->id) {
+            return response(['response' => 'Sem permissão para deletar esse contato.'], 400);
         }
         $calendar->bo_ativo = false;
         if (!$calendar->delete()) {

@@ -39,7 +39,8 @@ docker compose exec api php artisan migrate       # migrations no banco local
 - **Lead e referido são a mesma tabela.** Um cliente sem `id_parent` é um lead (raiz); com `id_parent`, é um referido indicado por aquele cliente. Um referido que indica alguém também aparece como raiz na listagem.
 - **Status do atendimento** (`customers.status`): `a` aberto, `ld` ligar depois, `pc` problemas com cartão, `n` não tem interesse, `c` comprou.
 - **Arquivar** é `bo_ativo = 0`; nada é apagado. **Preferência** é `bo_preference`.
-- Cada vendedor só enxerga os próprios clientes (`id_usuario`). Nem toda rota confere isso; ao mexer, confira.
+- Cada vendedor só enxerga e altera os próprios dados (`id_usuario`). Toda rota que recebe um id busca o registro já filtrando pelo usuário logado (`Customers::doUsuario`); `SegurancaEntreContasTest` cobre isso. Rota nova precisa do mesmo cuidado e de um teste lá.
+- `customers.status_alterado_em` guarda quando o status mudou pela última vez (`Customers::marcarMudancaDeStatus`); o painel de resultados conta atendimentos e vendas por essa data.
 - Colunas `bo_*` são booleanas; `id_*` são chaves estrangeiras.
 
 ## Estrutura
@@ -50,6 +51,13 @@ docker compose exec api php artisan migrate       # migrations no banco local
 - `app/Http/Controllers/`: um controller por recurso. A regra de negócio está neles e nos models em `app/` (métodos estáticos).
 - `app/Http/Helpers.php`: classe global `Helpers`, carregada pelo `composer.json` (`autoload.files`). Datas, telefones, CPF, identificação de navegador.
 - `app/Library/`: integrações externas (Trello em `Jira.php`, CEP, CNPJ). Só o Trello é usado pelas rotas.
+- `app/Resultados.php` (números do vendedor, `GET /api/resultados`) e `app/MetricasDeUso.php` (números da plataforma para o administrador, `GET /api/metricas-de-uso`).
+- `app/LinkDeIndicacao.php` e `IndicacaoController`: link público pelo qual o cliente de um vendedor informa quem indica. `GET` e `POST /api/indicacao/{codigo}` não exigem login, têm limite próprio de requisições e nunca revelam se um telefone já está na carteira do vendedor. Quando entra contato novo, o vendedor recebe um e-mail (`IndicacoesRecebidasPeloLink`).
+- `app/Mail/NaoEnviaParaEnderecoDeTeste.php` cancela qualquer e-mail cujos destinatários estejam todos em domínio reservado para teste (`.test`, `.example`...), como as contas criadas pelos testes de ponta a ponta.
+- `ContaController`: exportação dos clientes em CSV, preferência do lembrete e exclusão da conta (apaga tudo do vendedor, exige a senha).
+- `app/Console/Commands/EnviaLembretesDasLigacoesDoDia.php`: `php artisan lembretes:ligacoes-do-dia` envia a cada vendedor as ligações agendadas para o dia. Roda por cron no servidor, uma vez por dia (`--simular` só informa quantos e-mails sairiam); o link de cancelamento do e-mail é assinado (`LembreteDeLigacoes`).
+- `config/wiseller.php`: endereços da plataforma, da API e do site usados nos e-mails e nos links.
+- A recuperação de senha usa link assinado com a chave da aplicação e a senha atual: vale por um dia e deixa de valer depois de usado.
 - `app/Console/BloqueioDeComandosDestrutivos.php`: impede comandos que apagam tabelas fora do banco de testes.
 - `GET /api/customers` aceita `page` e `perPage` (padrão 8, máximo 50) e, nesse caso, devolve também `total`; sem `page`, devolve todos os leads. O front sempre pagina.
 - **Cuidado com consultas dentro de laços**: listagem, busca, "ligar depois", agenda e árvore de indicação buscam telefones e referidos em lote (`Phone::agrupadosPorCliente`, `Customers::getAll`). `ConsultasAoBancoTest` falha se o número de consultas voltar a crescer com a quantidade de clientes.
@@ -77,8 +85,8 @@ docker compose exec api vendor/bin/phpunit --filter ClientesCadastro
 - Usam o MySQL `wiseller_test`, montado pelas migrations. Cada teste esvazia as tabelas. Há uma trava que recusa rodar em banco que não termine em `_test`.
 - **Os testes usam só HTTP e SQL direto** (`tests/Support/CriaDados.php`), sem factories nem recursos de teste do framework, para continuarem válidos depois da atualização do Laravel. Mantenha assim.
 - `tests/Support/ChamaApi.php` limpa a autenticação entre requisições do mesmo teste; use sempre `chamarApi()` e `enviarArquivoParaApi()` em vez de `$this->json()` direto.
+- Teste que simula data (`travelTo`) precisa fazer isso antes de criar o usuário autenticado, senão o token é recusado.
 - Nenhum teste envia e-mail (`Mail::fake()`, `MAIL_MAILER=array`) nem chama o Trello (`API_TRELLO_URL` aponta para um endereço que não responde no `phpunit.xml`).
-- `RotasComDefeitoConhecidoTest` registra rotas que hoje dão erro 500. Ao consertar uma, tire-a de lá e escreva o teste do comportamento correto.
 - PHPUnit 12: provedor de dados é método `public static` e é ligado ao teste pelo atributo `#[DataProvider('nome')]`, não por comentário.
 
 ## Deploy
@@ -97,7 +105,7 @@ Consequências práticas:
 - Variável nova no `.env` precisa ser criada à mão no servidor; o deploy não toca no `.env`.
 - Para mudar a versão do PHP de produção, altere `deploy/versao-do-php` (formato do cPanel, hoje `ea-php85`) junto com o `PHP_VERSION` do workflow e a imagem do Docker local.
 - Uploads são gravados em `img/<pasta>` (relativo à raiz do projeto) e em `storage/app/public`. Se criar outro local de upload, proteja-o no workflow.
-- A versão exibida ao usuário está fixa na rota `currentVersion` em `routes/api.php`; atualize-a ao publicar algo que o usuário perceba.
+- A versão exibida ao usuário está fixa na rota `currentVersion` em `routes/api.php` (`version`, `resume` e `link`). Para avisar de uma versão nova: crie no Notion a página `Wiseller - Versão X` como primeiro item da lista em "Wiseller - Novidades" (ela já fica pública em `forested-file-aaa.notion.site`), e troque aqui o número, o resumo e o `link` para o endereço público dessa página. O front mostra o aviso quando o número muda e o botão "Ver as novidades" abre o `link`.
 
 ## Convenções
 
@@ -105,4 +113,4 @@ Consequências práticas:
 - Clean Code e SOLID: funções pequenas, nomes descritivos, sem números mágicos, retorno antecipado em vez de `else` e de condicionais aninhadas.
 - Commits: mensagem começando com `[branch]`, um commit por mudança lógica, sem linhas de coautoria.
 - Não rodar o Pint.
-- Não acionar e-mail real nem o Trello a partir do ambiente local: confira o `.env` antes de testar esses fluxos manualmente.
+- Não acionar e-mail real nem o Trello a partir do ambiente local: confira o `.env` antes de testar esses fluxos manualmente. Isso inclui o comando `lembretes:ligacoes-do-dia`.

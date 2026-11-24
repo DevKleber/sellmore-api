@@ -3,7 +3,7 @@
     <tbody>
         <tr style="background-color:#1D3055;display:flex">
             <td style="padding:15px" width="55px" valign="middle">
-                <img src="https://wiseller.com.br/assets/img/system/wiseller.png" style="max-width:100%" class="CToWUd">
+                <img src="{{ config('wiseller.endereco_do_site') }}/assets/img/system/wiseller.png" style="max-width:100%" class="CToWUd">
             </td>
             <td style="color:#fff;font-size:12px;line-height:16px;padding:15px;text-align:left; display: flex; align-items: center; font-size: 3rem;" width="50%"
                 valign="middle" align="right">

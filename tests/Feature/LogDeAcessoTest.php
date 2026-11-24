@@ -152,14 +152,13 @@ class LogDeAcessoTest extends ApiTestCase
         $this->assertSame([['language' => 'pt-BR', 'total' => 2], ['language' => 'en-US', 'total' => 1]], $resposta->json('totalLanguage'));
     }
 
-    public function test_consulta_de_um_registro_de_acesso_por_id()
+    public function test_registro_de_acesso_nao_pode_ser_consultado_nem_apagado_por_id()
     {
         [$admin, $token] = $this->criarAdministrador();
         $log = $this->criarLogDeAcesso($admin['id'], ['browser' => 'Firefox']);
 
-        $resposta = $this->chamarApi('GET', "/api/access_log/{$log['id']}", [], $token);
-
-        $resposta->assertStatus(200)->assertJson(['id' => $log['id'], 'browser' => 'Firefox']);
+        $this->chamarApi('GET', "/api/access_log/{$log['id']}", [], $token)->assertStatus(404);
+        $this->chamarApi('DELETE', "/api/access_log/{$log['id']}", [], $token)->assertStatus(404);
         $this->assertSame(1, DB::table('usuario_log')->count());
     }
 }

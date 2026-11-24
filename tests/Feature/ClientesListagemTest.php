@@ -106,12 +106,39 @@ class ClientesListagemTest extends ApiTestCase
         $this->assertSame(['Comprou', 'Ligar Depois'], $this->nomes($resposta->json('arCustomers.0.referidos')));
     }
 
-    public function test_cliente_raiz_aparece_mesmo_com_status_fora_do_filtro()
+    public function test_filtro_de_status_so_lista_o_lead_que_esta_no_status_ou_tem_referido_nele()
+    {
+        [$usuario, $token] = $this->criarUsuarioAutenticado();
+        $this->criarCliente($usuario['id'], ['name' => 'A Lead Sem Interesse', 'status' => 'n']);
+        $this->criarCliente($usuario['id'], ['name' => 'B Lead Para Ligar', 'status' => 'ld']);
+        $comReferido = $this->criarCliente($usuario['id'], ['name' => 'C Lead Com Referido Para Ligar', 'status' => 'c']);
+        $this->criarCliente($usuario['id'], ['name' => 'Referido Para Ligar', 'status' => 'ld', 'id_parent' => $comReferido['id']]);
+        $semNinguem = $this->criarCliente($usuario['id'], ['name' => 'D Lead Com Referido Aberto', 'status' => 'a']);
+        $this->criarCliente($usuario['id'], ['name' => 'Referido Aberto', 'status' => 'a', 'id_parent' => $semNinguem['id']]);
+
+        $resposta = $this->listar($token, ['boShowLigarDepois' => 'true', 'page' => 1]);
+
+        $this->assertSame(['B Lead Para Ligar', 'C Lead Com Referido Para Ligar'], $this->nomes($resposta->json('arCustomers')));
+        $this->assertSame(2, $resposta->json('total'));
+    }
+
+    public function test_referido_arquivado_no_status_nao_faz_o_lead_aparecer_no_filtro()
+    {
+        [$usuario, $token] = $this->criarUsuarioAutenticado();
+        $lead = $this->criarCliente($usuario['id'], ['name' => 'Lead Aberto', 'status' => 'a']);
+        $this->criarCliente($usuario['id'], ['name' => 'Arquivado Para Ligar', 'status' => 'ld', 'bo_ativo' => 0, 'id_parent' => $lead['id']]);
+
+        $resposta = $this->listar($token, ['boShowLigarDepois' => 'true']);
+
+        $this->assertSame([], $this->nomes($resposta->json('arCustomers')));
+    }
+
+    public function test_com_todos_os_status_ligados_todo_lead_aparece()
     {
         [$usuario, $token] = $this->criarUsuarioAutenticado();
         $this->criarCliente($usuario['id'], ['name' => 'Raiz Sem Interesse', 'status' => 'n']);
 
-        $resposta = $this->listar($token, ['boShowAberto' => 'true']);
+        $resposta = $this->listar($token);
 
         $this->assertSame(['Raiz Sem Interesse'], $this->nomes($resposta->json('arCustomers')));
     }

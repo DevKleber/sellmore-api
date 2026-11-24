@@ -12,6 +12,28 @@ class Customers extends Model
     protected $fillable = ['name', 'phone', 'address', 'status', 'id_usuario', 'id_parent', 'observation', 'bo_ativo', 'bo_preference'];
 
 
+    public static function doUsuario($id, $idUsuario)
+    {
+        return self::where('id', $id)->where('id_usuario', $idUsuario)->first();
+    }
+
+    /**
+     * O painel de resultados conta atendimentos e vendas pela data em que o status mudou.
+     */
+    public function marcarMudancaDeStatus()
+    {
+        if ($this->isDirty('status')) {
+            $this->status_alterado_em = now();
+        }
+    }
+
+    protected static function booted()
+    {
+        static::creating(function (self $cliente) {
+            $cliente->status_alterado_em = $cliente->status_alterado_em ?? now();
+        });
+    }
+
     public static function getStatus()
     {
         return [
@@ -46,6 +68,7 @@ class Customers extends Model
 
         $idUsuario = auth('api')->user()->id;
         $consultaDeLeads = self::consultaDeLeads($idUsuario, $options['orderBy'] ?? null);
+        self::manterSoLeadsComOsStatus($consultaDeLeads, $idUsuario, $statusSelecionados);
         $pagina = self::paginaPedida($options);
 
         $resposta = [];
@@ -93,6 +116,29 @@ class Customers extends Model
         }
 
         return $consulta->orderBy('name')->orderBy('id');
+    }
+
+    /**
+     * Com um filtro de status ligado, o card so aparece se o lead ou algum referido ativo dele esta naquele status.
+     * Com todos os status ligados nada e filtrado.
+     */
+    private static function manterSoLeadsComOsStatus($consultaDeLeads, $idUsuario, $statusSelecionados)
+    {
+        if (count($statusSelecionados) === count(self::STATUS_POR_FILTRO)) {
+            return;
+        }
+
+        $consultaDeLeads->where(function ($leads) use ($idUsuario, $statusSelecionados) {
+            $leads->whereIn('status', $statusSelecionados)
+                ->orWhereIn('id', function ($comReferidoNoStatus) use ($idUsuario, $statusSelecionados) {
+                    $comReferidoNoStatus->select('id_parent')
+                        ->from('customers')
+                        ->where('id_usuario', $idUsuario)
+                        ->where('bo_ativo', true)
+                        ->whereIn('status', $statusSelecionados)
+                        ->whereNotNull('id_parent');
+                });
+        });
     }
 
     private static function paginaPedida($options)
