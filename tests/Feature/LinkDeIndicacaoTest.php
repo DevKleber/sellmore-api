@@ -2,13 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Mail\IndicacoesRecebidasPeloLink;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Tests\ApiTestCase;
 
 class LinkDeIndicacaoTest extends ApiTestCase
 {
     private const TAMANHO_DO_CODIGO = 40;
-    private const MAXIMO_POR_ENVIO = 10;
+    private const MAXIMO_POR_ENVIO = 50;
     private const LINK_INVALIDO = 'Este link de indicação não está mais disponível';
 
     private $usuario;
@@ -19,6 +21,7 @@ class LinkDeIndicacaoTest extends ApiTestCase
     {
         parent::setUp();
 
+        Mail::fake();
         [$this->usuario, $this->token] = $this->criarUsuarioAutenticado(['nome' => 'Marcos Vendedor']);
         $this->lead = $this->criarCliente($this->usuario['id'], ['name' => 'Carla Cliente']);
     }
@@ -138,7 +141,7 @@ class LinkDeIndicacaoTest extends ApiTestCase
 
         $resposta = $this->indicar($this->codigoDoLead(), $indicados);
 
-        $resposta->assertStatus(400)->assertExactJson(['response' => 'Envie no máximo 10 pessoas por vez']);
+        $resposta->assertStatus(400)->assertExactJson(['response' => 'Envie no máximo 50 pessoas por vez']);
         $this->assertSame([], $this->referidosDoLead());
     }
 
@@ -174,5 +177,31 @@ class LinkDeIndicacaoTest extends ApiTestCase
         $resposta = $this->chamarApi('GET', '/api/customers?boShowAberto=true&page=1', [], $this->token);
 
         $this->assertSame('Paulo Indicado', $resposta->json('arCustomers.0.referidos.0.name'));
+    }
+
+    public function test_vendedor_e_avisado_por_email_com_o_nome_do_cliente_e_dos_indicados()
+    {
+        $this->indicar($this->codigoDoLead(), [
+            ['nome' => 'Paulo Indicado', 'telefone' => '62999990001'],
+            ['nome' => 'Rita Indicada', 'telefone' => '62999990002'],
+        ])->assertStatus(200);
+
+        Mail::assertSent(IndicacoesRecebidasPeloLink::class, 1);
+        $email = Mail::sent(IndicacoesRecebidasPeloLink::class)->first();
+        $this->assertTrue($email->hasTo($this->usuario['email']));
+        $this->assertSame('Carla Cliente', $email->nomeDoCliente);
+        $this->assertSame(['Paulo Indicado', 'Rita Indicada'], $email->indicados);
+        $email->assertHasSubject('Wiseller - Carla Cliente indicou 2 pessoas');
+        $this->assertStringContainsString('Paulo Indicado', $email->render());
+    }
+
+    public function test_sem_contato_novo_o_vendedor_nao_recebe_email()
+    {
+        $existente = $this->criarCliente($this->usuario['id']);
+        $this->criarTelefone($existente['id'], '62999990001');
+
+        $this->indicar($this->codigoDoLead(), [['nome' => 'Repetido', 'telefone' => '62999990001']])->assertStatus(200);
+
+        Mail::assertNothingSent();
     }
 }

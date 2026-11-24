@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Customers;
 use App\Funcionario;
 use App\LinkDeIndicacao;
+use App\Mail\IndicacoesRecebidasPeloLink;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class IndicacaoController extends Controller
 {
@@ -57,9 +60,26 @@ class IndicacaoController extends Controller
             return response(['response' => 'Envie no máximo '.LinkDeIndicacao::MAXIMO_DE_INDICADOS_POR_ENVIO.' pessoas por vez'], 400);
         }
 
-        LinkDeIndicacao::gravar($cliente, $indicados);
+        $this->avisarVendedor($cliente, LinkDeIndicacao::gravar($cliente, $indicados));
 
         return response(['response' => 'Indicações recebidas. Obrigado!', 'dados' => ['recebidos' => count($indicados)]]);
+    }
+
+    /**
+     * A falha no envio do aviso nao pode fazer o cliente achar que as indicacoes se perderam.
+     */
+    private function avisarVendedor(Customers $cliente, array $nomesGravados)
+    {
+        $vendedor = Funcionario::find($cliente->id_usuario);
+        if (0 === count($nomesGravados) || empty($vendedor->email)) {
+            return;
+        }
+
+        try {
+            Mail::to($vendedor->email)->send(new IndicacoesRecebidasPeloLink($vendedor->nome, $cliente->name, $nomesGravados));
+        } catch (\Throwable $falha) {
+            Log::error("Aviso de indicacoes nao enviado para o usuario {$vendedor->id}: {$falha->getMessage()}");
+        }
     }
 
     private function primeiroNome($nome)

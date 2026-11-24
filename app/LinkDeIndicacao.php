@@ -11,7 +11,8 @@ use Illuminate\Support\Str;
  */
 class LinkDeIndicacao
 {
-    public const MAXIMO_DE_INDICADOS_POR_ENVIO = 10;
+    /** Cabe uma lista de contatos importada de uma vez. */
+    public const MAXIMO_DE_INDICADOS_POR_ENVIO = 50;
 
     private const TAMANHO_DO_CODIGO = 40;
     private const MAXIMO_DE_REFERIDOS_DO_CLIENTE = 200;
@@ -93,17 +94,17 @@ class LinkDeIndicacao
     }
 
     /**
-     * Grava os indicados como referidos do cliente. Telefone que o vendedor ja tem e ignorado em silencio,
-     * para a pagina publica nao revelar quem esta na carteira dele.
+     * Grava os indicados como referidos do cliente e devolve os nomes gravados. Telefone que o vendedor ja tem
+     * e ignorado em silencio, para a pagina publica nao revelar quem esta na carteira dele.
      */
     public static function gravar(Customers $cliente, array $indicados)
     {
         return DB::transaction(function () use ($cliente, $indicados) {
             $vagas = self::MAXIMO_DE_REFERIDOS_DO_CLIENTE - self::totalDeReferidos($cliente);
-            $gravados = 0;
+            $gravados = [];
 
             foreach ($indicados as $indicado) {
-                if ($gravados >= $vagas) {
+                if (count($gravados) >= $vagas) {
                     break;
                 }
                 if (self::vendedorJaTemOTelefone($cliente->id_usuario, $indicado['telefone'])) {
@@ -111,7 +112,7 @@ class LinkDeIndicacao
                 }
 
                 self::criarReferido($cliente, $indicado);
-                ++$gravados;
+                $gravados[] = $indicado['nome'];
             }
 
             return $gravados;

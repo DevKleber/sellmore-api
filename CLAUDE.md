@@ -52,7 +52,8 @@ docker compose exec api php artisan migrate       # migrations no banco local
 - `app/Http/Helpers.php`: classe global `Helpers`, carregada pelo `composer.json` (`autoload.files`). Datas, telefones, CPF, identificação de navegador.
 - `app/Library/`: integrações externas (Trello em `Jira.php`, CEP, CNPJ). Só o Trello é usado pelas rotas.
 - `app/Resultados.php` (números do vendedor, `GET /api/resultados`) e `app/MetricasDeUso.php` (números da plataforma para o administrador, `GET /api/metricas-de-uso`).
-- `app/LinkDeIndicacao.php` e `IndicacaoController`: link público pelo qual o cliente de um vendedor informa quem indica. `GET` e `POST /api/indicacao/{codigo}` não exigem login, têm limite próprio de requisições e nunca revelam se um telefone já está na carteira do vendedor.
+- `app/LinkDeIndicacao.php` e `IndicacaoController`: link público pelo qual o cliente de um vendedor informa quem indica. `GET` e `POST /api/indicacao/{codigo}` não exigem login, têm limite próprio de requisições e nunca revelam se um telefone já está na carteira do vendedor. Quando entra contato novo, o vendedor recebe um e-mail (`IndicacoesRecebidasPeloLink`).
+- `app/Mail/NaoEnviaParaEnderecoDeTeste.php` cancela qualquer e-mail cujos destinatários estejam todos em domínio reservado para teste (`.test`, `.example`...), como as contas criadas pelos testes de ponta a ponta.
 - `ContaController`: exportação dos clientes em CSV, preferência do lembrete e exclusão da conta (apaga tudo do vendedor, exige a senha).
 - `app/Console/Commands/EnviaLembretesDasLigacoesDoDia.php`: `php artisan lembretes:ligacoes-do-dia` envia a cada vendedor as ligações agendadas para o dia. Roda por cron no servidor, uma vez por dia (`--simular` só informa quantos e-mails sairiam); o link de cancelamento do e-mail é assinado (`LembreteDeLigacoes`).
 - `config/wiseller.php`: endereços da plataforma, da API e do site usados nos e-mails e nos links.
