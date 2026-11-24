@@ -7,6 +7,7 @@ use App\Http\Controllers\ContaController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\FuncionarioController;
 use App\Http\Controllers\IndicacaoController;
+use App\Http\Controllers\LembreteController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\ResultadosController;
 use App\Http\Controllers\StrategyController;
@@ -34,6 +35,8 @@ Route::put('auth/changePassoword', [AuthController::class, 'recoverPasswordAfter
 Route::post('user/new', [FuncionarioController::class, 'store']);
 
 Route::post('issue', [TrelloController::class, 'issue']);
+
+Route::get('lembretes/cancelar/{idUsuario}/{assinatura}', [LembreteController::class, 'cancelar']);
 
 Route::group(['middleware' => 'throttle:indicacao'], function () {
     Route::get('indicacao/{codigo}', [IndicacaoController::class, 'apresentar']);
