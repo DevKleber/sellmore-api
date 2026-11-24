@@ -6,6 +6,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ContaController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\FuncionarioController;
+use App\Http\Controllers\IndicacaoController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\ResultadosController;
 use App\Http\Controllers\StrategyController;
@@ -34,6 +35,11 @@ Route::post('user/new', [FuncionarioController::class, 'store']);
 
 Route::post('issue', [TrelloController::class, 'issue']);
 
+Route::group(['middleware' => 'throttle:indicacao'], function () {
+    Route::get('indicacao/{codigo}', [IndicacaoController::class, 'apresentar']);
+    Route::post('indicacao/{codigo}', [IndicacaoController::class, 'receber']);
+});
+
 Route::get('currentVersion', function () {
     $version = '1.1.81';
     return ["version" => $version, "resume" => "Correção: Servidor offline 📱"];
@@ -56,6 +62,8 @@ Route::group(['middleware' => 'apiJwt'], function () {
     Route::get('parents/customers/{id}', [CustomersController::class, 'getAllParents']);
     Route::put('status/customers/{id}', [CustomersController::class, 'changeStatus']);
     Route::post('import-contact/customers/{id}', [CustomersController::class, 'importContact']);
+
+    Route::post('link-indicacao/customers/{id}', [IndicacaoController::class, 'gerarLink']);
 
     Route::post('preference', [CustomersController::class, 'giveOrRemovePreference']);
 
