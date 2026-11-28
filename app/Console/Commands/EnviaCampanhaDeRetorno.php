@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\CampanhaDeRetorno;
+use App\Mail\RecusaDoDestinatario;
 use App\Mail\VoltaAoWiseller;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,7 @@ class EnviaCampanhaDeRetorno extends Command
 {
     private const LOTE_PADRAO = 10;
     private const LIMITE_DIARIO_PADRAO = 90;
+    private const MAXIMO_DE_RECUSAS_SEGUIDAS = 5;
 
     protected $signature = 'campanha:volta-ao-wiseller
         {--lote='.self::LOTE_PADRAO.' : Quantos e-mails enviar nesta execucao}
@@ -41,8 +43,10 @@ class EnviaCampanhaDeRetorno extends Command
             return self::SUCCESS;
         }
 
-        $enviados = $this->enviarLote($campanha, $destinatarios);
-        $this->info(now()->format('Y-m-d H:i')." Enviados: {$enviados}. Pendentes: {$campanha->quantidadeDePendentes()}.");
+        $resultado = $this->enviarLote($campanha, $destinatarios);
+        $this->info(now()->format('Y-m-d H:i')
+            ." Enviados: {$resultado['enviados']}. Recusados: {$resultado['recusados']}."
+            ." Pendentes: {$campanha->quantidadeDePendentes()}.");
 
         return self::SUCCESS;
     }
@@ -55,36 +59,58 @@ class EnviaCampanhaDeRetorno extends Command
     }
 
     /**
-     * Para no primeiro erro: quase sempre e o limite da caixa de e-mail, e insistir
-     * so acumularia recusas. O proximo lote retoma de onde este parou.
+     * Endereco recusado (caixa que nao existe) fica registrado e o lote segue. Qualquer
+     * outra falha, em geral o limite da caixa de saida, ou recusas demais em sequencia
+     * interrompem o lote: o proximo retoma de onde este parou.
      */
-    private function enviarLote(CampanhaDeRetorno $campanha, $destinatarios): int
+    private function enviarLote(CampanhaDeRetorno $campanha, $destinatarios): array
     {
-        $enviados = 0;
+        $resultado = ['enviados' => 0, 'recusados' => 0];
+        $recusasSeguidas = 0;
+
         foreach ($destinatarios as $conta) {
-            if (!$this->enviar($conta)) {
-                return $enviados;
+            $falha = $this->tentarEnviar($conta);
+            if (null === $falha) {
+                $campanha->registrarEnvio($conta->id);
+                ++$resultado['enviados'];
+                $recusasSeguidas = 0;
+
+                continue;
             }
 
-            $campanha->registrarEnvio($conta->id);
-            ++$enviados;
+            if (!RecusaDoDestinatario::eDefinitiva($falha)) {
+                $this->avisarFalha($conta, $falha);
+
+                return $resultado;
+            }
+
+            $campanha->registrarRecusa($conta->id, $falha->getMessage());
+            ++$resultado['recusados'];
+            if (++$recusasSeguidas >= self::MAXIMO_DE_RECUSAS_SEGUIDAS) {
+                $this->warn('Recusas demais em sequencia; o lote foi interrompido.');
+
+                return $resultado;
+            }
         }
 
-        return $enviados;
+        return $resultado;
     }
 
-    private function enviar($conta): bool
+    private function tentarEnviar($conta): ?\Throwable
     {
         try {
             Mail::to($conta->email)->send(new VoltaAoWiseller($conta->nome));
         } catch (\Throwable $falha) {
-            Log::error("Convite de retorno nao enviado para o usuario {$conta->id}: {$falha->getMessage()}");
-            $this->error("Falha no envio para o usuario {$conta->id}: {$falha->getMessage()}");
-
-            return false;
+            return $falha;
         }
 
-        return true;
+        return null;
+    }
+
+    private function avisarFalha($conta, \Throwable $falha): void
+    {
+        Log::error("Convite de retorno nao enviado para o usuario {$conta->id}: {$falha->getMessage()}");
+        $this->error("Falha no envio para o usuario {$conta->id}: {$falha->getMessage()}");
     }
 
     private function enviarTeste(string $email)
@@ -96,7 +122,10 @@ class EnviaCampanhaDeRetorno extends Command
             return self::FAILURE;
         }
 
-        if (!$this->enviar($conta)) {
+        $falha = $this->tentarEnviar($conta);
+        if (null !== $falha) {
+            $this->avisarFalha($conta, $falha);
+
             return self::FAILURE;
         }
 
