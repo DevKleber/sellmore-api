@@ -16,6 +16,7 @@ class CampanhaDeRetorno
 
     private const TABELA_DE_ENVIOS = 'envio_de_campanha';
     private const DIAS_SEM_ACESSO = 30;
+    private const TAMANHO_DO_MOTIVO = 255;
     private const FORMATO_DO_EMAIL = '^[^@[:space:]]+@[^@[:space:]]+\\.[A-Za-z]{2,}$';
 
     private $verificadorDeDominio;
@@ -45,10 +46,24 @@ class CampanhaDeRetorno
 
     public function registrarEnvio(int $idUsuario): void
     {
+        $this->registrar($idUsuario, null);
+    }
+
+    /**
+     * A tentativa recusada tambem conta no limite do dia: a caixa de saida conta o envio.
+     */
+    public function registrarRecusa(int $idUsuario, string $motivo): void
+    {
+        $this->registrar($idUsuario, mb_substr($motivo, 0, self::TAMANHO_DO_MOTIVO));
+    }
+
+    private function registrar(int $idUsuario, ?string $motivoDaRecusa): void
+    {
         DB::table(self::TABELA_DE_ENVIOS)->insert([
             'id_usuario' => $idUsuario,
             'campanha' => self::NOME,
             'enviado_em' => now(),
+            'motivo_da_recusa' => $motivoDaRecusa,
         ]);
     }
 
