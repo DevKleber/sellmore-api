@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Console\BloqueioDeComandosDestrutivos;
 use App\Mail\NaoEnviaParaEnderecoDeTeste;
+use App\Mail\VerificadorDeDominio;
+use App\Mail\VerificadorDeDominioPorDns;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
@@ -27,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        //
+        $this->app->singleton(VerificadorDeDominio::class, VerificadorDeDominioPorDns::class);
     }
 
     /**
