@@ -87,6 +87,18 @@ class RecuperacaoDeSenhaTest extends ApiTestCase
         $this->assertEqualsWithDelta($antesDoPedido + self::VALIDADE_DO_LINK_EM_SEGUNDOS, strtotime($conteudo['expired']), self::TOLERANCIA_EM_SEGUNDOS);
     }
 
+    public function test_email_traz_o_nome_e_o_botao_com_o_link_de_troca()
+    {
+        $usuario = $this->criarUsuario(['nome' => 'Maria Vendedora']);
+
+        $this->linkDeRecuperacao($usuario);
+
+        $corpo = Mail::sent(SendMailRecover::class)->first()->render();
+        $this->assertStringContainsString('Olá, Maria Vendedora', $corpo);
+        $this->assertStringContainsString('Criar uma senha nova', $corpo);
+        $this->assertStringContainsString(e($this->dadosDoEmailEnviado()['link']), $corpo);
+    }
+
     private function dadosDoEmailEnviado(): array
     {
         $email = Mail::sent(SendMailRecover::class)->first();
