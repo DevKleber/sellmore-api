@@ -9,7 +9,7 @@ use Tests\ApiTestCase;
 
 class MigrationsTest extends ApiTestCase
 {
-    private const TABELAS_DO_SISTEMA = ['calendar', 'customers', 'customers_phone', 'strategy', 'usuario', 'usuario_log'];
+    private const TABELAS_DO_SISTEMA = ['calendar', 'customers', 'customers_phone', 'envio_de_campanha', 'strategy', 'usuario', 'usuario_log'];
 
     private function tabelasDoSistemaNoBanco(): array
     {
