@@ -46,7 +46,7 @@ Route::group(['middleware' => 'throttle:indicacao'], function () {
 Route::get('currentVersion', function () {
     $version = '1.2.0';
     $resume = 'Peça indicações por link, acompanhe seus resultados, receba o lembrete das ligações do dia e muito mais. Tudo mais rápido e de cara nova.';
-    $link = 'https://forested-file-aaa.notion.site/4222d6172cf78091a103c190acd6aac9';
+    $link = config('wiseller.pagina_das_novidades');
 
     return ['version' => $version, 'resume' => $resume, 'link' => $link];
 });
